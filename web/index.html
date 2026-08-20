@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Visualiseur de graphe orienté</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Visualiseur de graphe orienté</h1>
+      <label class="file-button">
+        Choisir un fichier .txt
+        <input type="file" id="file-input" accept=".txt" hidden />
+      </label>
+      <span class="file-name" id="file-name"></span>
+    </header>
+
+    <main class="canvas" id="canvas">
+      <p class="hint" id="hint">Dépose un fichier .txt ici, ou choisis-en un ci-dessus.</p>
+      <div id="cy"></div>
+    </main>
+
+    <footer class="app-footer" id="stats"></footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

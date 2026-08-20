@@ -1,0 +1,89 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.app-header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  flex: 1;
+}
+
+.file-button {
+  background: #4c72b0;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.file-button:hover {
+  background: #3d5c8f;
+}
+
+.file-name {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.canvas {
+  flex: 1;
+  position: relative;
+  background: #f8fafc;
+}
+
+.canvas.drag-over {
+  background: #eef2ff;
+}
+
+#cy {
+  width: 100%;
+  height: 100%;
+}
+
+.hint,
+.error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #64748b;
+  margin: 0;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.app-footer {
+  padding: 0.5rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.85rem;
+  min-height: 1.5em;
+}

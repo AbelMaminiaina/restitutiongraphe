@@ -1,0 +1,19 @@
+[project]
+name = "restitution"
+version = "0.1.0"
+description = "Parse un fichier texte de noeuds/arêtes et génère une image de graphe orienté"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx>=3.6",
+    "matplotlib>=3.9",
+]
+
+[project.scripts]
+restitution = "restitution.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/restitution"]

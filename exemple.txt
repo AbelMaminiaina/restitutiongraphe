@@ -1,0 +1,13 @@
+NOEUDS
+A
+B
+C
+D
+E
+ARETES
+A B
+A C
+B D
+C D
+D E
+E A

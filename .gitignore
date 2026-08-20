@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Sorties générées par le CLI
+/*.png
+/*.svg
+/*.pdf
+
+# Node (si jamais un tooling frontend revient)
+node_modules/
+dist/
