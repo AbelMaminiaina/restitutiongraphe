@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug : Graphe (index.html)",
+      "file": "${workspaceFolder}/web/index.html",
+      "webRoot": "${workspaceFolder}/web"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug : Liste des nœuds (nodes.html)",
+      "file": "${workspaceFolder}/web/nodes.html",
+      "webRoot": "${workspaceFolder}/web"
+    },
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug : Détail d'un nœud (node.html)",
+      "file": "${workspaceFolder}/web/node.html",
+      "webRoot": "${workspaceFolder}/web"
+    }
+  ]
+}

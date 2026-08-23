@@ -9,17 +9,22 @@ navigateur (via `web/`).
 ```
 restitutiondonnees/
 ├── exemple.txt                     # fichier de données (format NOEUDS/ARETES)
-├── pyproject.toml                  # dépendances Python (networkx, matplotlib)
+├── pyproject.toml                  # dépendances Python (networkx, matplotlib, extra "api")
+├── scripts/
+│   └── seed_sqlserver.py           # génère 100k nœuds + arêtes dans SQL Server
 │
-├── web/                            # visualisation navigateur, autonome (aucun serveur)
-│   ├── index.html
-│   ├── style.css
-│   └── app.js                      # parsing JS + rendu Cytoscape.js
+├── web/                            # visualisation navigateur, autonome (aucun serveur requis)
+│   ├── index.html / app.js         # graphe interactif (fichier .txt ou base)
+│   ├── nodes.html / nodes.js       # liste paginée des nœuds + transformations
+│   ├── node.html / node.js         # détail d'un nœud : successeurs/prédécesseurs
+│   └── style.css
 │
-├── src/restitution/                # CLI Python (export image)
-│   ├── cli.py                      # Controller — point d'entrée ligne de commande
+├── src/restitution/
+│   ├── cli.py                      # Controller CLI — point d'entrée ligne de commande
+│   ├── api.py                      # Controller API — FastAPI, sert des sous-graphes
+│   ├── db.py                       # Model DB — accès SQL Server (recherche/voisinage/BFS)
 │   ├── models/
-│   │   └── graph.py                # Model — GraphModel : parsing + validation
+│   │   └── graph.py                # Model fichier — GraphModel : parsing + validation
 │   └── views/
 │       └── image_view.py           # View — GraphModel -> PNG/SVG/PDF
 │
@@ -84,6 +89,87 @@ Ouvrir `web/index.html` directement (double-clic, pas de serveur requis),
 puis glisser un `.txt` ou cliquer "Choisir un fichier". `app.js` parse le
 fichier et l'affiche avec **Cytoscape.js** + le plugin **dagre** (layout
 hiérarchique automatique, zoom/pan, sélection de nœuds).
+
+Fonctionnalités additionnelles côté navigateur :
+- **Plus court chemin** (BFS, non pondéré) entre deux nœuds du graphe
+  chargé — via les menus déroulants ou en cliquant deux nœuds.
+- **Restitution du graphe** : densité, composantes connexes, degré
+  moyen/max, nœuds isolés, présence de cycle — recalculés à chaque
+  chargement, sur le sous-graphe affiché.
+
+## 3bis. Grands volumes — base SQL Server + API
+
+Au-delà de quelques dizaines de milliers de nœuds, tout charger dans le
+navigateur ne tient plus (`web/` casse). Le principe : **ne jamais envoyer
+le graphe complet au client**, seulement le sous-graphe demandé.
+
+```
+SQL Server (RestitutionGraphe : dbo.LINE_VIS_EDG)
+        │  pyodbc
+        ▼
+src/restitution/db.py        — BFS/recherche par paliers, bornés en
+                                profondeur et en nombre de nœuds
+        │
+        ▼
+src/restitution/api.py       — FastAPI, endpoints REST (JSON)
+        │  fetch()
+        ▼
+web/app.js (panneau "Base de données")
+```
+
+- **Schéma** : une seule table, `dbo.LINE_VIS_EDG(Id, Nodes, Direction,
+  NodesLie, Transformation)`. Pas de table de nœuds séparée — un nœud est
+  simplement une valeur qui apparaît en colonne `Nodes` ou `NodesLie`.
+  Chaque ligne relie `Nodes` à `NodesLie` ; `Direction` (`'predecesseur'`
+  ou `'successeur'`) indique le rôle de `Nodes` par rapport à `NodesLie` :
+  - `Direction = 'predecesseur'` → `Nodes` précède `NodesLie` → arête
+    **Nodes → NodesLie**
+  - `Direction = 'successeur'` → `Nodes` suit `NodesLie` → arête
+    **NodesLie → Nodes**
+
+  `Nodes` et `NodesLie` sont en `VARCHAR(8000)` (le maximum autorisé par
+  SQL Server pour un `VARCHAR` non-`MAX` — `9000` dépasse cette limite et
+  est rejeté par le moteur). Deux index composites permettent les
+  recherches de voisinage/chemin sans balayage complet : `(Nodes,
+  Direction) INCLUDE (NodesLie)` et `(NodesLie, Direction) INCLUDE
+  (Nodes)`. `db.py` interroge toujours ces deux colonnes séparément
+  (jamais un seul `OR` entre les deux) pour que chaque requête utilise son
+  index par une recherche (seek). Limite à connaître : la clé d'un index
+  classique est plafonnée à 900 octets par SQL Server — l'insertion d'un
+  identifiant réel dépassant cette taille échouerait avec ces index en
+  place (avertissement émis à la création de la table).
+- **`scripts/seed_sqlserver.py`** génère un jeu de démonstration : 100 000
+  nœuds, 2 à 6 arêtes sortantes chacune (~400 000 lignes), avec une
+  `Transformation` aléatoire (SELECT/JOIN/FILTER/...), insertion par lots
+  avec `fast_executemany`.
+- **`src/restitution/db.py`** expose `search_nodes`, `list_nodes` (page de
+  nœuds distincts + leurs transformations liées), `node_detail`
+  (successeurs/prédécesseurs directs d'un nœud), `neighborhood` (voisinage
+  à N sauts, non orienté, plafonné en taille), `shortest_path` (BFS
+  dirigé), `global_stats`. Les requêtes de parcours par paliers sont
+  découpées par lots de 1000 paramètres (limite SQL Server ~2100/requête)
+  car un front de BFS explose vite avec un degré moyen élevé.
+- **`src/restitution/api.py`** — `uvicorn restitution.api:app --port 8000
+  --app-dir src` — expose ces fonctions en REST (`/api/search`,
+  `/api/nodes`, `/api/node`, `/api/neighborhood`, `/api/path`,
+  `/api/stats/global`), CORS ouvert pour être appelé depuis `web/` en
+  `fetch()`.
+- **`web/nodes.html`** liste les nœuds distincts (paginée, recherche par
+  sous-chaîne) avec leurs transformations liées ; cliquer une ligne ouvre
+  **`web/node.html?id=...`**, qui affiche deux tableaux — prédécesseurs et
+  successeurs directs, chacun avec sa transformation — et permet de
+  naviguer de nœud en nœud en cliquant les lignes.
+- Côté navigateur, un voisinage ou un chemin récupéré depuis l'API est
+  injecté dans le **même pipeline de rendu** que le chargement de fichier
+  (`renderGraph`, `computeStats`, `runPathSearch`) : aucune duplication de
+  logique entre les deux modes de chargement. `app.js` appelle l'API en
+  `127.0.0.1` plutôt que `localhost` — sur Windows, la résolution de
+  `localhost` essaie d'abord IPv6 (`::1`) avant de retomber sur IPv4, ce
+  qui ajoute plusieurs secondes de latence perceptible par requête.
+
+Connexion par défaut : `localhost\SQLEXPRESS01` (authentification
+Windows), configurable via les variables d'environnement
+`RESTITUTION_DB_SERVER` / `RESTITUTION_DB_NAME`.
 
 ## 3. Python — les bases utilisées ici
 
@@ -237,4 +323,15 @@ python -m restitution.cli exemple.txt -o graphe.png
 python -m pytest tests/ -q
 
 # Visualiser dans le navigateur : ouvrir web/index.html directement
+
+# --- Grands volumes (base SQL Server) ---
+
+# Installer les dépendances de l'API
+python -m pip install -e ".[api]"
+
+# Créer/peupler la base (100 000 nœuds, ~400 000 arêtes de démo)
+python scripts/seed_sqlserver.py
+
+# Démarrer l'API (nécessaire pour le panneau "Base de données" dans web/)
+python -m uvicorn restitution.api:app --port 8000 --app-dir src
 ```

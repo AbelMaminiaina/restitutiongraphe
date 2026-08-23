@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recherche de chemin</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Recherche de chemin</h1>
+      <a class="file-button" href="index.html">Graphe</a>
+      <a class="file-button" href="nodes.html">Nœuds &amp; transformations</a>
+    </header>
+
+    <main class="nodes-main">
+      <p class="panel-hint">
+        Vérifie si un chemin existe entre deux nœuds, directement dans la
+        base complète (100 000 nœuds) — pas seulement dans un sous-graphe
+        déjà chargé.
+      </p>
+
+      <div class="nodes-toolbar">
+        <label class="field" style="max-width: 260px">
+          Source
+          <input type="text" id="path-source-input" placeholder="ex: N1" autocomplete="off" />
+        </label>
+        <label class="field" style="max-width: 260px">
+          Cible
+          <input type="text" id="path-target-input" placeholder="ex: N50000" autocomplete="off" />
+        </label>
+        <button id="path-search-btn" class="btn btn-primary" type="button" style="max-width: 140px">Chercher</button>
+        <button id="path-clear-btn" class="btn btn-ghost" type="button" style="max-width: 120px">Effacer</button>
+      </div>
+
+      <div id="path-result-banner" class="path-result-banner"></div>
+
+      <div id="path-chain" class="path-chain"></div>
+
+      <div class="nodes-table-wrap path-graph-wrap">
+        <div id="path-cy" class="path-cy"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="path.js"></script>
+</body>
+</html>

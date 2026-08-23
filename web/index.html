@@ -13,6 +13,8 @@
   <div class="app">
     <header class="app-header">
       <h1>Visualiseur de graphe orienté</h1>
+      <a class="file-button" href="nodes.html">Nœuds &amp; transformations</a>
+      <a class="file-button" href="path.html">Recherche de chemin</a>
       <label class="file-button">
         Choisir un fichier .txt
         <input type="file" id="file-input" accept=".txt" hidden />
@@ -20,12 +22,84 @@
       <span class="file-name" id="file-name"></span>
     </header>
 
-    <main class="canvas" id="canvas">
-      <p class="hint" id="hint">Dépose un fichier .txt ici, ou choisis-en un ci-dessus.</p>
-      <div id="cy"></div>
-    </main>
+    <div class="body">
+      <main class="canvas" id="canvas">
+        <p class="hint" id="hint">Dépose un fichier .txt ici, ou choisis-en un ci-dessus.</p>
+        <div id="cy"></div>
+      </main>
 
-    <footer class="app-footer" id="stats"></footer>
+      <aside class="sidebar">
+        <section class="panel" id="db-panel">
+          <h2>Base de données</h2>
+          <p class="panel-hint" id="db-status">Connexion à l'API…</p>
+
+          <div class="stats-grid" id="db-global-stats"></div>
+
+          <label class="field" style="margin-top: 0.75rem">
+            Rechercher un nœud
+            <input type="text" id="db-search-input" placeholder="ex: N123" autocomplete="off" />
+          </label>
+          <div class="panel-actions">
+            <button id="db-search-btn" class="btn btn-primary" type="button">Rechercher</button>
+          </div>
+          <div class="chip-list" id="db-search-results"></div>
+
+          <label class="field" style="margin-top: 0.75rem">
+            Profondeur du voisinage
+            <select id="db-depth">
+              <option value="1">1 saut</option>
+              <option value="2" selected>2 sauts</option>
+              <option value="3">3 sauts</option>
+              <option value="4">4 sauts</option>
+            </select>
+          </label>
+          <p class="panel-hint">Clique un résultat de recherche pour charger son voisinage.</p>
+
+          <p class="panel-hint" style="margin-top: 1rem">
+            Plus court chemin sur les 100 000 nœuds (pas seulement le sous-graphe affiché) :
+          </p>
+          <label class="field">
+            Source
+            <input type="text" id="db-path-source" placeholder="ex: N1" autocomplete="off" />
+          </label>
+          <label class="field">
+            Cible
+            <input type="text" id="db-path-target" placeholder="ex: N50000" autocomplete="off" />
+          </label>
+          <div class="panel-actions">
+            <button id="db-path-find" class="btn btn-primary" type="button">Chercher dans la base</button>
+          </div>
+          <p id="db-path-result" class="panel-result"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Plus court chemin</h2>
+          <p class="panel-hint">
+            Choisis deux nœuds ci-dessous, ou clique-en deux directement sur
+            le graphe (BFS, sens des arêtes respecté). Double-clique un nœud
+            pour ouvrir sa page de détail.
+          </p>
+          <label class="field">
+            Source
+            <select id="path-source"><option value="">—</option></select>
+          </label>
+          <label class="field">
+            Cible
+            <select id="path-target"><option value="">—</option></select>
+          </label>
+          <div class="panel-actions">
+            <button id="path-find" class="btn btn-primary" type="button">Trouver le chemin</button>
+            <button id="path-clear" class="btn btn-ghost" type="button">Effacer</button>
+          </div>
+          <p id="path-result" class="panel-result"></p>
+        </section>
+
+        <section class="panel">
+          <h2>Restitution du graphe</h2>
+          <div class="stats-grid" id="stats-panel"></div>
+        </section>
+      </aside>
+    </div>
   </div>
 
   <script src="app.js"></script>

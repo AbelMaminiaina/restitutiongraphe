@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Détail d'un nœud</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1 id="node-title">Détail du nœud</h1>
+      <a class="file-button" href="nodes.html">← Liste des nœuds</a>
+      <a class="file-button" href="index.html">Graphe</a>
+      <a class="file-button" href="path.html">Recherche de chemin</a>
+    </header>
+
+    <div class="body">
+      <main class="nodes-main">
+        <p class="panel-hint" id="node-status">Chargement…</p>
+
+        <div class="node-detail-columns">
+          <section class="node-detail-col">
+            <h2>Prédécesseurs <span class="count-badge" id="pred-count"></span></h2>
+            <div class="nodes-table-wrap">
+              <table class="nodes-table">
+                <thead>
+                  <tr>
+                    <th>Nœud</th>
+                    <th>Transformation</th>
+                  </tr>
+                </thead>
+                <tbody id="pred-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="node-detail-col">
+            <h2>Successeurs <span class="count-badge" id="succ-count"></span></h2>
+            <div class="nodes-table-wrap">
+              <table class="nodes-table">
+                <thead>
+                  <tr>
+                    <th>Nœud</th>
+                    <th>Transformation</th>
+                  </tr>
+                </thead>
+                <tbody id="succ-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <h2>Historique de navigation <span class="count-badge" id="history-count"></span></h2>
+          <p class="panel-hint">Trace des nœuds visités pendant cette session.</p>
+          <div class="panel-actions">
+            <button id="history-view-graph" class="btn btn-primary" type="button">Voir le graphe de navigation</button>
+            <button id="history-clear" class="btn btn-ghost" type="button">Effacer</button>
+          </div>
+          <div class="history-list" id="history-list"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="node.js"></script>
+</body>
+</html>
