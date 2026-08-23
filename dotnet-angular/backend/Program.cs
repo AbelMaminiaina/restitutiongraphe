@@ -5,7 +5,8 @@
 // même forme de réponse JSON, même logique déléguée à un repository dédié
 // (LineVisEdgRepository, équivalent de db.py).
 //
-// Lancer avec : dotnet run (par défaut sur http://localhost:5080)
+// Lancer avec : dotnet run (par défaut sur http://localhost:5065, voir
+// Properties/launchSettings.json)
 
 using PathFinder.Api;
 
@@ -25,9 +26,9 @@ app.UseCors();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGet("/api/path", async (string source, string target, LineVisEdgRepository repo, int maxDepth = 12) =>
+app.MapGet("/api/path", (string source, string target, LineVisEdgRepository repo, int maxDepth = 12) =>
 {
-    var result = await repo.ShortestPathAsync(source, target, Math.Min(maxDepth, 20));
+    var result = repo.ShortestPath(source, target, Math.Min(maxDepth, 20));
 
     if (!result.Found)
         return Results.NotFound(new { detail = $"Aucun chemin de '{source}' vers '{target}'." });
