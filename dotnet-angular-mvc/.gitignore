@@ -1,0 +1,13 @@
+# .NET
+bin/
+obj/
+
+# wwwroot est généré par `ng build` (ClientApp -> ../wwwroot) : à
+# reconstruire, pas à committer.
+/wwwroot/
+
+# Angular (ClientApp/.gitignore couvre déjà node_modules/, dist/, etc.
+# pour ce sous-dossier, mais on l'exclut aussi ici par sécurité)
+ClientApp/node_modules/
+ClientApp/dist/
+ClientApp/.angular/

@@ -1,0 +1,65 @@
+<div class="app">
+  <header class="app-header">
+    <h1>Recherche de chemin — Angular / C# MVC (projet unique)</h1>
+  </header>
+
+  <main class="main">
+    <p class="hint">
+      Vérifie si un chemin existe entre deux nœuds dans la base complète
+      (table <code>LINE_VIS_EDG</code>), via l'API C# <code>PathController</code>
+      — même logique BFS bidirectionnelle que <code>dotnet-angular/</code>,
+      mais backend et frontend réunis dans un seul projet ASP.NET Core MVC
+      (Angular compilé dans <code>wwwroot/</code>, servi par le même process).
+    </p>
+
+    <div class="toolbar">
+      <label class="field">
+        Source
+        <input
+          type="text"
+          [(ngModel)]="source"
+          (keydown.enter)="search()"
+          placeholder="ex: N1"
+          autocomplete="off"
+        />
+      </label>
+      <label class="field">
+        Cible
+        <input
+          type="text"
+          [(ngModel)]="target"
+          (keydown.enter)="search()"
+          placeholder="ex: N50000"
+          autocomplete="off"
+        />
+      </label>
+      <button type="button" class="btn btn-primary" (click)="search()">Chercher</button>
+      <button type="button" class="btn btn-ghost" (click)="clear()">Effacer</button>
+    </div>
+
+    @if (bannerKind()) {
+      <div
+        class="banner"
+        [class.found]="bannerKind() === 'found'"
+        [class.not-found]="bannerKind() === 'not-found'"
+      >
+        {{ bannerText() }}
+      </div>
+    }
+
+    @if (path().length > 0) {
+      <div class="chain">
+        @for (id of path(); track id + $index; let i = $index) {
+          @if (i > 0) {
+            <span class="arrow">→</span>
+          }
+          <span class="chip">{{ id }}</span>
+        }
+      </div>
+    }
+
+    <div class="graph-wrap">
+      <div #cyContainer class="cy"></div>
+    </div>
+  </main>
+</div>
