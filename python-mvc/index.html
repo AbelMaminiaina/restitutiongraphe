@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Restitution de graphe orienté — exemple.txt</title>
+  <script src="https://unpkg.com/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+  <style>
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.app-header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+  flex: 1;
+}
+
+.upload-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.file-button {
+  background: #4c72b0;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.file-button:hover {
+  background: #3d5c8f;
+}
+
+.file-name {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.canvas {
+  flex: 1;
+  position: relative;
+  background: #f8fafc;
+}
+
+.canvas.drag-over {
+  background: #eef2ff;
+}
+
+#cy {
+  width: 100%;
+  height: 100%;
+}
+
+.hint,
+.error {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #64748b;
+  margin: 0;
+  z-index: 1;
+}
+
+.error {
+  color: #dc2626;
+}
+
+.app-footer {
+  padding: 0.5rem 1.25rem;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.85rem;
+  min-height: 1.5em;
+}
+
+.app-footer code {
+  background: #f1f5f9;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+}
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <h1>Restitution de graphe orienté — Python MVC (export autonome)</h1>
+      <label class="file-button">
+        Choisir un fichier .txt
+        <input type="file" id="file-input" accept=".txt" hidden />
+      </label>
+      <span class="file-name" id="file-name">Généré depuis exemple.txt</span>
+    </header>
+
+    <main class="canvas" id="canvas">
+      <p class="hint" id="hint" style="display: none"></p>
+      <div id="cy"></div>
+    </main>
+
+    <footer class="app-footer" id="stats">
+      5 nœuds · 6 arêtes · cycle détecté — layout calculé par networkx (positions figées à la génération)
+    </footer>
+  </div>
+
+  <script>
+    // Graphe initial : calculé par networkx (Python) à la génération de cette
+    // page, positions déjà figées (layout "preset", rien à recalculer).
+    const INITIAL_ELEMENTS = [{"data": {"id": "A", "label": "A"}, "position": {"x": 0.0, "y": 0.0}}, {"data": {"id": "B", "label": "B"}, "position": {"x": -60.0, "y": 120.0}}, {"data": {"id": "C", "label": "C"}, "position": {"x": 60.0, "y": 120.0}}, {"data": {"id": "D", "label": "D"}, "position": {"x": 0.0, "y": 240.0}}, {"data": {"id": "E", "label": "E"}, "position": {"x": 0.0, "y": 360.0}}, {"data": {"id": "A->B", "source": "A", "target": "B"}}, {"data": {"id": "A->C", "source": "A", "target": "C"}}, {"data": {"id": "B->D", "source": "B", "target": "D"}}, {"data": {"id": "C->D", "source": "C", "target": "D"}}, {"data": {"id": "D->E", "source": "D", "target": "E"}}, {"data": {"id": "E->A", "source": "E", "target": "A"}}];
+
+    const hint = document.getElementById("hint");
+    const fileInput = document.getElementById("file-input");
+    const fileName = document.getElementById("file-name");
+    const stats = document.getElementById("stats");
+    const cyContainer = document.getElementById("cy");
+
+    let cy = null;
+
+    const CY_STYLE = [
+      {
+        selector: "node",
+        style: {
+          "background-color": "#4C72B0",
+          label: "data(label)",
+          color: "#fff",
+          "text-valign": "center",
+          "text-halign": "center",
+          "font-size": 12,
+          width: 42,
+          height: 42,
+        },
+      },
+      {
+        selector: "edge",
+        style: {
+          width: 2,
+          "line-color": "#94a3b8",
+          "target-arrow-color": "#94a3b8",
+          "target-arrow-shape": "triangle",
+          "curve-style": "bezier",
+        },
+      },
+    ];
+
+    // Rendu initial : positions déjà calculées par networkx, aucun layout
+    // recalculé côté client.
+    cy = cytoscape({
+      container: cyContainer,
+      elements: INITIAL_ELEMENTS,
+      style: CY_STYLE,
+      layout: { name: "preset" },
+    });
+
+    /* ---------- Upload d'un nouveau fichier : pas de serveur ici (page
+       ouverte en file://), donc parsing + layout + détection de cycle
+       réimplémentés en JS (mirroir de models/graph_model.py), layout via
+       le plugin dagre plutôt que l'algorithme networkx. ---------- */
+
+    const NODE_HEADERS = new Set(["noeuds", "nœuds", "nodes"]);
+    const EDGE_HEADERS = new Set(["aretes", "arêtes", "edges"]);
+
+    function parseGraphText(text) {
+      const nodes = [];
+      const seenNodes = new Set();
+      const edges = [];
+      let section = null;
+
+      for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) continue;
+
+        const header = line.toLowerCase();
+        if (NODE_HEADERS.has(header)) {
+          section = "nodes";
+          continue;
+        }
+        if (EDGE_HEADERS.has(header)) {
+          section = "edges";
+          continue;
+        }
+
+        if (section === "nodes") {
+          if (!seenNodes.has(line)) {
+            seenNodes.add(line);
+            nodes.push({ id: line });
+          }
+        } else if (section === "edges") {
+          const parts = line.split(/\s+/);
+          if (parts.length < 2) {
+            throw new Error(`Ligne d'arête invalide (attendu "source cible"): "${rawLine}"`);
+          }
+          const [source, target] = parts;
+          for (const id of [source, target]) {
+            if (!seenNodes.has(id)) {
+              seenNodes.add(id);
+              nodes.push({ id });
+            }
+          }
+          edges.push({ source, target });
+        } else {
+          throw new Error(`Ligne hors section (attendu NOEUDS/ARETES avant tout contenu): "${rawLine}"`);
+        }
+      }
+
+      if (nodes.length === 0) {
+        throw new Error("Aucun noeud trouvé dans le fichier.");
+      }
+
+      return { nodes, edges };
+    }
+
+    function detectCycle(data) {
+      const adjacency = {};
+      data.nodes.forEach((n) => (adjacency[n.id] = []));
+      data.edges.forEach((e) => adjacency[e.source].push(e.target));
+
+      const color = {};
+      data.nodes.forEach((n) => (color[n.id] = 0));
+      let cyclic = false;
+
+      function visit(u) {
+        color[u] = 1;
+        for (const v of adjacency[u] || []) {
+          if (color[v] === 1) {
+            cyclic = true;
+            return;
+          }
+          if (color[v] === 0) {
+            visit(v);
+            if (cyclic) return;
+          }
+        }
+        color[u] = 2;
+      }
+
+      for (const n of data.nodes) {
+        if (color[n.id] === 0) visit(n.id);
+        if (cyclic) break;
+      }
+      return cyclic;
+    }
+
+    function setHint(message, isError = false) {
+      hint.textContent = message;
+      hint.className = isError ? "error" : "hint";
+      hint.style.display = message ? "block" : "none";
+    }
+
+    function renderGraph(data) {
+      if (cy) cy.destroy();
+
+      const elements = [
+        ...data.nodes.map((n) => ({ data: { id: n.id, label: n.id } })),
+        ...data.edges.map((e) => ({
+          data: { id: `${e.source}->${e.target}`, source: e.source, target: e.target },
+        })),
+      ];
+
+      cy = cytoscape({
+        container: cyContainer,
+        elements,
+        style: CY_STYLE,
+        layout: { name: "dagre", rankDir: "TB", nodeSep: 40, rankSep: 80 },
+      });
+    }
+
+    function loadFile(file) {
+      fileName.textContent = file.name;
+      setHint("Chargement…");
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = parseGraphText(String(reader.result));
+          setHint("");
+          renderGraph(data);
+          const cycle = detectCycle(data);
+          stats.innerHTML =
+            `${data.nodes.length} nœuds · ${data.edges.length} arêtes` +
+            (cycle ? " · cycle détecté" : "") +
+            ` — layout calculé en JavaScript (dagre) pour ce fichier chargé localement`;
+        } catch (err) {
+          setHint(err.message ?? String(err), true);
+        }
+      };
+      reader.onerror = () => setHint("Impossible de lire le fichier.", true);
+      reader.readAsText(file, "utf-8");
+    }
+
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files?.[0];
+      if (file) loadFile(file);
+    });
+  </script>
+</body>
+</html>
