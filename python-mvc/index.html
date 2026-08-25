@@ -111,6 +111,83 @@ body {
   border-radius: 4px;
 }
 
+.interaction-hint {
+  margin: 0;
+  padding: 0.4rem 1.25rem;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-panel {
+  position: fixed;
+  top: 0;
+  right: -320px;
+  width: 300px;
+  height: 100%;
+  background: #fff;
+  border-left: 1px solid #e2e8f0;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+  padding: 1.25rem;
+  overflow-y: auto;
+  transition: right 0.2s ease;
+  z-index: 10;
+}
+
+.detail-panel.visible {
+  right: 0;
+}
+
+.detail-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  border: none;
+  background: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.detail-panel h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.05rem;
+  color: #1e293b;
+}
+
+.detail-section h3 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  margin: 1.1rem 0 0.4rem;
+}
+
+.detail-section ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.detail-section li {
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.detail-section li.empty {
+  background: none;
+  color: #94a3b8;
+  font-style: italic;
+  padding: 0;
+}
+
   </style>
 </head>
 <body>
@@ -124,6 +201,12 @@ body {
       <span class="file-name" id="file-name">Généré depuis exemple.txt</span>
     </header>
 
+    <p class="interaction-hint">
+      Clique un nœud pour surligner ses prédécesseurs/successeurs directs,
+      double-clique pour voir son détail. Reclique le nœud sélectionné (ou
+      le fond) pour désélectionner.
+    </p>
+
     <main class="canvas" id="canvas">
       <p class="hint" id="hint" style="display: none"></p>
       <div id="cy"></div>
@@ -133,6 +216,19 @@ body {
       5 nœuds · 6 arêtes · cycle détecté — layout calculé par networkx (positions figées à la génération)
     </footer>
   </div>
+
+  <aside class="detail-panel" id="detail-panel">
+    <button class="detail-close" id="detail-close" type="button" aria-label="Fermer">×</button>
+    <h2 id="detail-title"></h2>
+    <div class="detail-section">
+      <h3>Prédécesseurs</h3>
+      <ul id="detail-predecessors"></ul>
+    </div>
+    <div class="detail-section">
+      <h3>Successeurs</h3>
+      <ul id="detail-successors"></ul>
+    </div>
+  </aside>
 
   <script>
     // Graphe initial : calculé par networkx (Python) à la génération de cette
@@ -144,8 +240,14 @@ body {
     const fileName = document.getElementById("file-name");
     const stats = document.getElementById("stats");
     const cyContainer = document.getElementById("cy");
+    const detailPanel = document.getElementById("detail-panel");
+    const detailClose = document.getElementById("detail-close");
+    const detailTitle = document.getElementById("detail-title");
+    const detailPredecessors = document.getElementById("detail-predecessors");
+    const detailSuccessors = document.getElementById("detail-successors");
 
     let cy = null;
+    let selectedNodeId = null;
 
     const CY_STYLE = [
       {
@@ -171,7 +273,72 @@ body {
           "curve-style": "bezier",
         },
       },
+      { selector: "node.rg-selected", style: { "background-color": "#f59e0b" } },
+      { selector: "node.rg-predecessor", style: { "background-color": "#0ea5e9" } },
+      { selector: "node.rg-successor", style: { "background-color": "#16a34a" } },
+      { selector: ".rg-dimmed", style: { opacity: 0.2 } },
+      {
+        selector: "edge.rg-highlighted",
+        style: { "line-color": "#f59e0b", "target-arrow-color": "#f59e0b", width: 3, opacity: 1 },
+      },
     ];
+
+    /* ---------- Clic = voisinage direct, double-clic = détail ---------- */
+
+    function clearHighlight() {
+      if (!cy) return;
+      cy.elements().removeClass("rg-selected rg-predecessor rg-successor rg-dimmed rg-highlighted");
+      selectedNodeId = null;
+    }
+
+    function highlightNode(nodeId) {
+      clearHighlight();
+      const node = cy.$id(nodeId);
+      const predecessors = node.incomers("node");
+      const successors = node.outgoers("node");
+
+      cy.elements().addClass("rg-dimmed");
+      node.removeClass("rg-dimmed").addClass("rg-selected");
+      predecessors.removeClass("rg-dimmed").addClass("rg-predecessor");
+      successors.removeClass("rg-dimmed").addClass("rg-successor");
+      node.connectedEdges().removeClass("rg-dimmed").addClass("rg-highlighted");
+
+      selectedNodeId = nodeId;
+    }
+
+    function renderIdList(container, ids) {
+      container.innerHTML = ids.length
+        ? ids.map((id) => `<li>${id}</li>`).join("")
+        : `<li class="empty">Aucun</li>`;
+    }
+
+    function showDetail(nodeId) {
+      const node = cy.$id(nodeId);
+      const predecessors = node.incomers("node").map((n) => n.id()).sort();
+      const successors = node.outgoers("node").map((n) => n.id()).sort();
+
+      detailTitle.textContent = `Nœud ${nodeId}`;
+      renderIdList(detailPredecessors, predecessors);
+      renderIdList(detailSuccessors, successors);
+      detailPanel.classList.add("visible");
+    }
+
+    detailClose.addEventListener("click", () => detailPanel.classList.remove("visible"));
+
+    function wireInteractions() {
+      cy.on("tap", "node", (evt) => {
+        const id = evt.target.id();
+        if (selectedNodeId === id) {
+          clearHighlight();
+        } else {
+          highlightNode(id);
+        }
+      });
+      cy.on("tap", (evt) => {
+        if (evt.target === cy) clearHighlight();
+      });
+      cy.on("dbltap", "node", (evt) => showDetail(evt.target.id()));
+    }
 
     // Rendu initial : positions déjà calculées par networkx, aucun layout
     // recalculé côté client.
@@ -181,6 +348,7 @@ body {
       style: CY_STYLE,
       layout: { name: "preset" },
     });
+    wireInteractions();
 
     /* ---------- Upload d'un nouveau fichier : pas de serveur ici (page
        ouverte en file://), donc parsing + layout + détection de cycle
@@ -293,6 +461,8 @@ body {
         style: CY_STYLE,
         layout: { name: "dagre", rankDir: "TB", nodeSep: 40, rankSep: 80 },
       });
+      wireInteractions();
+      detailPanel.classList.remove("visible");
     }
 
     function loadFile(file) {

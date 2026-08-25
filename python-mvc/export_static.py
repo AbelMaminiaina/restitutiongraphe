@@ -54,6 +54,12 @@ __CSS__
       <span class="file-name" id="file-name">Généré depuis __FILENAME__</span>
     </header>
 
+    <p class="interaction-hint">
+      Clique un nœud pour surligner ses prédécesseurs/successeurs directs,
+      double-clique pour voir son détail. Reclique le nœud sélectionné (ou
+      le fond) pour désélectionner.
+    </p>
+
     <main class="canvas" id="canvas">
       <p class="hint" id="hint" style="display: none"></p>
       <div id="cy"></div>
@@ -63,6 +69,19 @@ __CSS__
       __STATS_LINE__
     </footer>
   </div>
+
+  <aside class="detail-panel" id="detail-panel">
+    <button class="detail-close" id="detail-close" type="button" aria-label="Fermer">×</button>
+    <h2 id="detail-title"></h2>
+    <div class="detail-section">
+      <h3>Prédécesseurs</h3>
+      <ul id="detail-predecessors"></ul>
+    </div>
+    <div class="detail-section">
+      <h3>Successeurs</h3>
+      <ul id="detail-successors"></ul>
+    </div>
+  </aside>
 
   <script>
     // Graphe initial : calculé par networkx (Python) à la génération de cette
@@ -74,8 +93,14 @@ __CSS__
     const fileName = document.getElementById("file-name");
     const stats = document.getElementById("stats");
     const cyContainer = document.getElementById("cy");
+    const detailPanel = document.getElementById("detail-panel");
+    const detailClose = document.getElementById("detail-close");
+    const detailTitle = document.getElementById("detail-title");
+    const detailPredecessors = document.getElementById("detail-predecessors");
+    const detailSuccessors = document.getElementById("detail-successors");
 
     let cy = null;
+    let selectedNodeId = null;
 
     const CY_STYLE = [
       {
@@ -101,7 +126,72 @@ __CSS__
           "curve-style": "bezier",
         },
       },
+      { selector: "node.rg-selected", style: { "background-color": "#f59e0b" } },
+      { selector: "node.rg-predecessor", style: { "background-color": "#0ea5e9" } },
+      { selector: "node.rg-successor", style: { "background-color": "#16a34a" } },
+      { selector: ".rg-dimmed", style: { opacity: 0.2 } },
+      {
+        selector: "edge.rg-highlighted",
+        style: { "line-color": "#f59e0b", "target-arrow-color": "#f59e0b", width: 3, opacity: 1 },
+      },
     ];
+
+    /* ---------- Clic = voisinage direct, double-clic = détail ---------- */
+
+    function clearHighlight() {
+      if (!cy) return;
+      cy.elements().removeClass("rg-selected rg-predecessor rg-successor rg-dimmed rg-highlighted");
+      selectedNodeId = null;
+    }
+
+    function highlightNode(nodeId) {
+      clearHighlight();
+      const node = cy.$id(nodeId);
+      const predecessors = node.incomers("node");
+      const successors = node.outgoers("node");
+
+      cy.elements().addClass("rg-dimmed");
+      node.removeClass("rg-dimmed").addClass("rg-selected");
+      predecessors.removeClass("rg-dimmed").addClass("rg-predecessor");
+      successors.removeClass("rg-dimmed").addClass("rg-successor");
+      node.connectedEdges().removeClass("rg-dimmed").addClass("rg-highlighted");
+
+      selectedNodeId = nodeId;
+    }
+
+    function renderIdList(container, ids) {
+      container.innerHTML = ids.length
+        ? ids.map((id) => `<li>${id}</li>`).join("")
+        : `<li class="empty">Aucun</li>`;
+    }
+
+    function showDetail(nodeId) {
+      const node = cy.$id(nodeId);
+      const predecessors = node.incomers("node").map((n) => n.id()).sort();
+      const successors = node.outgoers("node").map((n) => n.id()).sort();
+
+      detailTitle.textContent = `Nœud ${nodeId}`;
+      renderIdList(detailPredecessors, predecessors);
+      renderIdList(detailSuccessors, successors);
+      detailPanel.classList.add("visible");
+    }
+
+    detailClose.addEventListener("click", () => detailPanel.classList.remove("visible"));
+
+    function wireInteractions() {
+      cy.on("tap", "node", (evt) => {
+        const id = evt.target.id();
+        if (selectedNodeId === id) {
+          clearHighlight();
+        } else {
+          highlightNode(id);
+        }
+      });
+      cy.on("tap", (evt) => {
+        if (evt.target === cy) clearHighlight();
+      });
+      cy.on("dbltap", "node", (evt) => showDetail(evt.target.id()));
+    }
 
     // Rendu initial : positions déjà calculées par networkx, aucun layout
     // recalculé côté client.
@@ -111,6 +201,7 @@ __CSS__
       style: CY_STYLE,
       layout: { name: "preset" },
     });
+    wireInteractions();
 
     /* ---------- Upload d'un nouveau fichier : pas de serveur ici (page
        ouverte en file://), donc parsing + layout + détection de cycle
@@ -223,6 +314,8 @@ __CSS__
         style: CY_STYLE,
         layout: { name: "dagre", rankDir: "TB", nodeSep: 40, rankSep: 80 },
       });
+      wireInteractions();
+      detailPanel.classList.remove("visible");
     }
 
     function loadFile(file) {
