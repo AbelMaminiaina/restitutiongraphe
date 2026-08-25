@@ -1,0 +1,6 @@
+networkx>=3.6
+pyvis>=0.3.2
+jupyter>=1.1
+nbconvert>=7.0
+ipykernel>=6.0
+ipywidgets>=8.0
