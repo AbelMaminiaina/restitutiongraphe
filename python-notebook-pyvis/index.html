@@ -8011,14 +8011,36 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <span class="s2">"""</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">render_directed_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="s2">"600px"</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_looks_layerable</span><span class="p">(</span><span class="n">graph</span><span class="p">:</span> <span class="n">nx</span><span class="o">.</span><span class="n">DiGraph</span><span class="p">,</span> <span class="n">threshold</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Heuristique : au-delà d'une certaine densité d'arêtes par nœud, un graphe est</span>
+<span class="sd">    en pratique une grosse composante fortement connexe (beaucoup de cycles qui se</span>
+<span class="sd">    recoupent). Un layout hiérarchique strict n'a alors plus de niveaux clairs à</span>
+<span class="sd">    calculer et tasse tous les nœuds sur une poignée de rangées : les arêtes qui</span>
+<span class="sd">    sautent plusieurs niveaux se chevauchent, et le rendu paraît "linéaire". Un</span>
+<span class="sd">    layout physique (à base de forces, qui répartit les nœuds en 2D) reste lisible</span>
+<span class="sd">    dans ce cas. Sert de valeur par défaut à `render_directed_graph` quand</span>
+<span class="sd">    `hierarchical` n'est pas fourni explicitement ; les sections 2 et 3 forcent</span>
+<span class="sd">    maintenant toutes les deux le layout physique, voir plus bas."""</span>
+    <span class="k">if</span> <span class="n">graph</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="n">graph</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span> <span class="o">/</span> <span class="n">graph</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">threshold</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">render_directed_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="n">output_path</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="s2">"600px"</span><span class="p">,</span> <span class="n">hierarchical</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""Écrit un fichier HTML autonome (vis.js) pour ce graphe, et renvoie un IFrame</span>
 <span class="sd">    pour l'afficher directement sous la cellule.</span>
 
 <span class="sd">    Zoomable/déplaçable nativement (vis.js). Clique un nœud pour surligner ses</span>
 <span class="sd">    prédécesseurs (bleu) et successeurs (vert) directs, reclique pour désélectionner.</span>
 <span class="sd">    Survole un nœud pour son détail (infobulle). Les arêtes de cycle sont en rouge</span>
-<span class="sd">    pointillé.</span>
+<span class="sd">    pointillé, toujours en ligne droite (pas de courbe), que le layout soit</span>
+<span class="sd">    hiérarchique ou physique.</span>
+
+<span class="sd">    `hierarchical` : None (défaut) laisse `_looks_layerable` décider automatiquement</span>
+<span class="sd">    entre layout hiérarchique (façon Sugiyama, adapté aux graphes peu cycliques) et</span>
+<span class="sd">    layout physique/forces (meilleur pour un graphe dense avec beaucoup de cycles</span>
+<span class="sd">    imbriqués, qui sinon s'affiche tassé et avec des arêtes superposées). Passer</span>
+<span class="sd">    explicitement True/False pour forcer l'un ou l'autre.</span>
 
 <span class="sd">    cdn_resources="in_line" embarque vis.js directement dans le fichier généré (comme</span>
 <span class="sd">    plotly.js dans python-notebook/) : le fichier reste utilisable hors ligne, et comme</span>
@@ -8027,6 +8049,8 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <span class="sd">    du HTML/JS injecté directement dans la sortie d'une cellule (cas de python-notebook/).</span>
 <span class="sd">    """</span>
     <span class="n">back_edges</span> <span class="o">=</span> <span class="n">find_back_edges</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">hierarchical</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">hierarchical</span> <span class="o">=</span> <span class="n">_looks_layerable</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span>
 
     <span class="n">net</span> <span class="o">=</span> <span class="n">Network</span><span class="p">(</span><span class="n">height</span><span class="o">=</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="s2">"100%"</span><span class="p">,</span> <span class="n">directed</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">notebook</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cdn_resources</span><span class="o">=</span><span class="s2">"in_line"</span><span class="p">)</span>
 
@@ -8045,15 +8069,31 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
             <span class="n">cycle</span><span class="o">=</span><span class="n">is_cycle_edge</span><span class="p">,</span>  <span class="c1"># propriété perso (pas standard vis.js), relue par le script de clic</span>
         <span class="p">)</span>
 
-    <span class="c1"># layout hiérarchique intégré à vis.js (façon Sugiyama) : pas besoin de calculer</span>
-    <span class="c1"># les positions nous-mêmes comme dans python-notebook/ (layered_positions)</span>
-    <span class="n">net</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
-        <span class="s2">"layout"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hierarchical"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"direction"</span><span class="p">:</span> <span class="s2">"UD"</span><span class="p">,</span> <span class="s2">"sortMethod"</span><span class="p">:</span> <span class="s2">"directed"</span><span class="p">,</span>
-                                     <span class="s2">"nodeSpacing"</span><span class="p">:</span> <span class="mi">130</span><span class="p">,</span> <span class="s2">"levelSeparation"</span><span class="p">:</span> <span class="mi">110</span><span class="p">}},</span>
-        <span class="s2">"physics"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
-        <span class="s2">"interaction"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hover"</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
-        <span class="s2">"edges"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"smooth"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"type"</span><span class="p">:</span> <span class="s2">"cubicBezier"</span><span class="p">,</span> <span class="s2">"forceDirection"</span><span class="p">:</span> <span class="s2">"vertical"</span><span class="p">}},</span>
-    <span class="p">}))</span>
+    <span class="c1"># smooth: False = arêtes toujours en ligne droite (pas de courbe bézier), aussi</span>
+    <span class="c1"># bien en layout hiérarchique qu'en layout physique.</span>
+    <span class="k">if</span> <span class="n">hierarchical</span><span class="p">:</span>
+        <span class="c1"># layout hiérarchique intégré à vis.js (façon Sugiyama) : pas besoin de calculer</span>
+        <span class="c1"># les positions nous-mêmes comme dans python-notebook/ (layered_positions)</span>
+        <span class="n">net</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
+            <span class="s2">"layout"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hierarchical"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"direction"</span><span class="p">:</span> <span class="s2">"UD"</span><span class="p">,</span> <span class="s2">"sortMethod"</span><span class="p">:</span> <span class="s2">"directed"</span><span class="p">,</span>
+                                         <span class="s2">"nodeSpacing"</span><span class="p">:</span> <span class="mi">130</span><span class="p">,</span> <span class="s2">"levelSeparation"</span><span class="p">:</span> <span class="mi">110</span><span class="p">}},</span>
+            <span class="s2">"physics"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+            <span class="s2">"interaction"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hover"</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+            <span class="s2">"edges"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"smooth"</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="p">}))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># layout physique (forces, solveur barnesHut) : répartit les nœuds en 2D selon</span>
+        <span class="c1"># leurs connexions plutôt que par niveaux, ce qui reste lisible même quand le</span>
+        <span class="c1"># graphe est une grosse masse de cycles imbriqués.</span>
+        <span class="n">net</span><span class="o">.</span><span class="n">set_options</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span>
+            <span class="s2">"layout"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hierarchical"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">False</span><span class="p">}},</span>
+            <span class="s2">"physics"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"enabled"</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span> <span class="s2">"solver"</span><span class="p">:</span> <span class="s2">"barnesHut"</span><span class="p">,</span>
+                        <span class="s2">"barnesHut"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"gravitationalConstant"</span><span class="p">:</span> <span class="o">-</span><span class="mi">8000</span><span class="p">,</span> <span class="s2">"springLength"</span><span class="p">:</span> <span class="mi">150</span><span class="p">,</span>
+                                      <span class="s2">"springConstant"</span><span class="p">:</span> <span class="mf">0.04</span><span class="p">},</span>
+                        <span class="s2">"stabilization"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"iterations"</span><span class="p">:</span> <span class="mi">300</span><span class="p">}},</span>
+            <span class="s2">"interaction"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"hover"</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+            <span class="s2">"edges"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"smooth"</span><span class="p">:</span> <span class="kc">False</span><span class="p">},</span>
+        <span class="p">}))</span>
 
     <span class="n">html</span> <span class="o">=</span> <span class="n">net</span><span class="o">.</span><span class="n">generate_html</span><span class="p">(</span><span class="n">notebook</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">click_script</span> <span class="o">=</span> <span class="n">_CLICK_SCRIPT_TEMPLATE</span> <span class="o">%</span> <span class="p">{</span>
@@ -8093,7 +8133,10 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span><span class="si">}</span><span class="s2"> nœuds, </span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span><span class="si">}</span><span class="s2"> arêtes, "</span>
       <span class="sa">f</span><span class="s2">"cycle détecté : </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">find_back_edges</span><span class="p">(</span><span class="n">graph</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
-<span class="n">render_directed_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s2">"graph_exemple.html"</span><span class="p">)</span>
+<span class="c1"># hierarchical=False : force le même layout physique (forces) que le grand graphe</span>
+<span class="c1"># (section 3), plutôt que le layout hiérarchique que choisirait _looks_layerable par</span>
+<span class="c1"># défaut pour un graphe aussi petit.</span>
+<span class="n">render_directed_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s2">"graph_exemple.html"</span><span class="p">,</span> <span class="n">hierarchical</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -8140,7 +8183,8 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="n">text_50</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">"../exemple_50_noeuds.txt"</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
 <span class="n">graph_50</span> <span class="o">=</span> <span class="n">parse_graph</span><span class="p">(</span><span class="n">text_50</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">graph_50</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span><span class="si">}</span><span class="s2"> nœuds, </span><span class="si">{</span><span class="n">graph_50</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span><span class="si">}</span><span class="s2"> arêtes"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">graph_50</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span><span class="si">}</span><span class="s2"> nœuds, </span><span class="si">{</span><span class="n">graph_50</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span><span class="si">}</span><span class="s2"> arêtes, "</span>
+      <span class="sa">f</span><span class="s2">"layout : </span><span class="si">{</span><span class="s1">'hiérarchique'</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">_looks_layerable</span><span class="p">(</span><span class="n">graph_50</span><span class="p">)</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">'physique (forces)'</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
 <span class="n">render_directed_graph</span><span class="p">(</span><span class="n">graph_50</span><span class="p">,</span> <span class="s2">"graph_50.html"</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="s2">"700px"</span><span class="p">)</span>
 </pre></div>
@@ -8155,7 +8199,7 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>50 nœuds, 100 arêtes
+<pre>50 nœuds, 100 arêtes, layout : physique (forces)
 </pre>
 </div>
 </div>
@@ -8175,8 +8219,13 @@ qu'une image statique, sans aucune interaction possible dessus.</p>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="4.-Upload-interactif-d'un-fichier-.txt">4. Upload interactif d'un fichier <code>.txt</code><a class="anchor-link" href="#4.-Upload-interactif-d'un-fichier-.txt">¶</a></h2><p>Plutôt qu'un chemin de fichier codé en dur, un bouton d'upload : choisis un
-fichier au format <code>NOEUDS</code>/<code>ARETES</code> depuis ton poste, le graphe correspondant
-s'affiche automatiquement en dessous (écrit dans <code>graph_upload.html</code>).</p>
+fichier au format <code>NOEUDS</code>/<code>ARETES</code> depuis ton poste, puis clique sur <strong>"Lire
+le fichier"</strong> quand tu es prêt pour afficher le graphe correspondant en
+dessous (écrit dans <code>graph_upload.html</code>). Choisir le fichier ne fait que le
+sélectionner — la lecture (parsing + rendu) ne se déclenche qu'au clic sur le
+bouton, pas automatiquement.</p>
+<p>Le layout (hiérarchique ou physique) est choisi automatiquement selon la
+densité du graphe uploadé, voir section 1 (<code>_looks_layerable</code>).</p>
 <p>⚠️ Le bouton lui-même passe par <code>ipywidgets</code> et <strong>nécessite un noyau Python
 actif</strong> (Jupyter, DataLab...) — dans l'export statique <code>index.html</code>, le
 bouton s'affiche mais l'upload ne déclenche rien (aucun noyau pour le
@@ -8196,17 +8245,33 @@ pyvis évoqué au tout début du notebook.</p>
 <div class="cm-editor cm-s-jupyter">
 <div class="highlight hl-ipython3"><pre><span></span><span class="c1"># Crée le bouton d'upload : accepte uniquement les fichiers .txt, un seul à la fois</span>
 <span class="n">upload_widget</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">FileUpload</span><span class="p">(</span><span class="n">accept</span><span class="o">=</span><span class="s2">".txt"</span><span class="p">,</span> <span class="n">multiple</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Choisir un fichier .txt"</span><span class="p">)</span>
+<span class="c1"># Bouton séparé : c'est lui, et lui seul, qui déclenche la lecture (parsing + rendu).</span>
+<span class="c1"># Désactivé tant qu'aucun fichier n'a été choisi.</span>
+<span class="n">read_button</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Button</span><span class="p">(</span><span class="n">description</span><span class="o">=</span><span class="s2">"Lire le fichier"</span><span class="p">,</span> <span class="n">disabled</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">button_style</span><span class="o">=</span><span class="s2">"primary"</span><span class="p">)</span>
 <span class="c1"># Output() = une zone de la page où afficher du texte/graphique par programme</span>
 <span class="n">upload_output</span> <span class="o">=</span> <span class="n">widgets</span><span class="o">.</span><span class="n">Output</span><span class="p">()</span>
 
 
-<span class="k">def</span><span class="w"> </span><span class="nf">_handle_upload</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Appelée automatiquement dès qu'un fichier est choisi dans le bouton (voir</span>
-<span class="sd">    upload_widget.observe(...) tout en bas)."""</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_file_chosen</span><span class="p">(</span><span class="n">change</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Appelée dès qu'un fichier est choisi dans le bouton d'upload (voir</span>
+<span class="sd">    upload_widget.observe(...) plus bas). Ne fait QUE activer le bouton de lecture —</span>
+<span class="sd">    pas de parsing ici, on attend le clic explicite sur "Lire le fichier"."""</span>
+    <span class="n">read_button</span><span class="o">.</span><span class="n">disabled</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">upload_widget</span><span class="o">.</span><span class="n">value</span>
+    <span class="k">with</span> <span class="n">upload_output</span><span class="p">:</span>
+        <span class="n">upload_output</span><span class="o">.</span><span class="n">clear_output</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">upload_widget</span><span class="o">.</span><span class="n">value</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">upload_widget</span><span class="o">.</span><span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"name"</span><span class="p">]</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Fichier choisi : </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">. Clique sur </span><span class="se">\"</span><span class="s2">Lire le fichier</span><span class="se">\"</span><span class="s2"> pour l'afficher."</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_handle_read_click</span><span class="p">(</span><span class="n">button</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Appelée uniquement au clic sur "Lire le fichier" (voir read_button.on_click(...)</span>
+<span class="sd">    plus bas) : c'est ici, et seulement ici, que le fichier est réellement lu (parsing</span>
+<span class="sd">    + détection de cycle + rendu pyvis)."""</span>
     <span class="k">with</span> <span class="n">upload_output</span><span class="p">:</span>
         <span class="n">upload_output</span><span class="o">.</span><span class="n">clear_output</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">upload_widget</span><span class="o">.</span><span class="n">value</span><span class="p">:</span>
-            <span class="nb">print</span><span class="p">(</span><span class="s2">"Aucun fichier."</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">"Aucun fichier choisi."</span><span class="p">)</span>
             <span class="k">return</span>
         <span class="n">uploaded</span> <span class="o">=</span> <span class="n">upload_widget</span><span class="o">.</span><span class="n">value</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>  <span class="c1"># ipywidgets&gt;=8 : dict avec name/type/size/content/last_modified</span>
 
@@ -8223,12 +8288,15 @@ pyvis évoqué au tout début du notebook.</p>
             <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Fichier invalide (</span><span class="si">{</span><span class="n">uploaded</span><span class="p">[</span><span class="s1">'name'</span><span class="p">]</span><span class="si">}</span><span class="s2">) : </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">return</span>
 
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">uploaded</span><span class="p">[</span><span class="s1">'name'</span><span class="p">]</span><span class="si">}</span><span class="s2"> : </span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span><span class="si">}</span><span class="s2"> nœuds, </span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span><span class="si">}</span><span class="s2"> arêtes, cycle détecté : </span><span class="si">{</span><span class="n">cycle</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="s2">"hiérarchique"</span> <span class="k">if</span> <span class="n">_looks_layerable</span><span class="p">(</span><span class="n">graph</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"physique (forces)"</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">uploaded</span><span class="p">[</span><span class="s1">'name'</span><span class="p">]</span><span class="si">}</span><span class="s2"> : </span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_nodes</span><span class="p">()</span><span class="si">}</span><span class="s2"> nœuds, </span><span class="si">{</span><span class="n">graph</span><span class="o">.</span><span class="n">number_of_edges</span><span class="p">()</span><span class="si">}</span><span class="s2"> arêtes, "</span>
+              <span class="sa">f</span><span class="s2">"cycle détecté : </span><span class="si">{</span><span class="n">cycle</span><span class="si">}</span><span class="s2">, layout : </span><span class="si">{</span><span class="n">layout</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="n">display</span><span class="p">(</span><span class="n">render_directed_graph</span><span class="p">(</span><span class="n">graph</span><span class="p">,</span> <span class="s2">"graph_upload.html"</span><span class="p">))</span>
 
 
-<span class="n">upload_widget</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="n">_handle_upload</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="s2">"value"</span><span class="p">)</span>
-<span class="n">display</span><span class="p">(</span><span class="n">upload_widget</span><span class="p">,</span> <span class="n">upload_output</span><span class="p">)</span>
+<span class="n">upload_widget</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="n">_handle_file_chosen</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="s2">"value"</span><span class="p">)</span>
+<span class="n">read_button</span><span class="o">.</span><span class="n">on_click</span><span class="p">(</span><span class="n">_handle_read_click</span><span class="p">)</span>
+<span class="n">display</span><span class="p">(</span><span class="n">widgets</span><span class="o">.</span><span class="n">HBox</span><span class="p">([</span><span class="n">upload_widget</span><span class="p">,</span> <span class="n">read_button</span><span class="p">]),</span> <span class="n">upload_output</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -8240,24 +8308,52 @@ pyvis évoqué au tout début du notebook.</p>
 <div class="jp-OutputArea jp-Cell-outputArea">
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jupyter-widgets jp-OutputArea-output" id="a8ab2522-c9a5-499d-a684-8db90305eda1" tabindex="0">
+<div class="jupyter-widgets jp-OutputArea-output" id="a1f28d36-b9d9-41de-9a6c-e7ec994794dc" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('a8ab2522-c9a5-499d-a684-8db90305eda1');
+var element = document.getElementById('a1f28d36-b9d9-41de-9a6c-e7ec994794dc');
 </script>
 <script type="application/vnd.jupyter.widget-view+json">
-{"model_id": "3c77bda5f5c5484fab96aaf1ca0ce59a", "version_major": 2, "version_minor": 0}
+{"model_id": "0263922201e3481db58df1d43e725b4d", "version_major": 2, "version_minor": 0}
 </script>
 </div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jupyter-widgets jp-OutputArea-output" id="3fb4fbef-76e3-41ea-8b7e-1953d4f1300b" tabindex="0">
+<div class="jupyter-widgets jp-OutputArea-output" id="5dc87504-4815-4d07-ba5e-bd16f9710b92" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('3fb4fbef-76e3-41ea-8b7e-1953d4f1300b');
+var element = document.getElementById('5dc87504-4815-4d07-ba5e-bd16f9710b92');
 </script>
 <script type="application/vnd.jupyter.widget-view+json">
-{"model_id": "5b31cdd50fdc4e73bd00aa9320ea553f", "version_major": 2, "version_minor": 0}
+{"model_id": "9132da9570f64e5a97c600811e9c0ab5", "version_major": 2, "version_minor": 0}
 </script>
+</div>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=a4e543dd-1f71-426e-8512-6bafc94e0a1d">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="cm-editor cm-s-jupyter">
+<div class="highlight hl-ipython3"><pre><span></span> 
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+</div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=5e551998-1bcc-436d-9213-3972a1f65e9a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea">
+<div class="jp-InputPrompt jp-InputArea-prompt">In [ ]:</div>
+<div class="jp-CodeMirrorEditor jp-Editor jp-InputArea-editor" data-type="inline">
+<div class="cm-editor cm-s-jupyter">
+<div class="highlight hl-ipython3"><pre><span></span> 
+</pre></div>
 </div>
 </div>
 </div>
@@ -8266,6 +8362,6 @@ var element = document.getElementById('3fb4fbef-76e3-41ea-8b7e-1953d4f1300b');
 </main>
 </body>
 <script type="application/vnd.jupyter.widget-state+json">
-{"state": {"3c77bda5f5c5484fab96aaf1ca0ce59a": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "FileUploadModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "FileUploadModel", "_view_count": null, "_view_module": "@jupyter-widgets\/controls", "_view_module_version": "2.0.0", "_view_name": "FileUploadView", "accept": ".txt", "button_style": "", "description": "Choisir un fichier .txt", "description_allow_html": false, "disabled": false, "error": "", "icon": "upload", "layout": "IPY_MODEL_85cfc4168cb14a1b86befe4bfccfad6f", "multiple": false, "style": "IPY_MODEL_586d6d7ce27c4d6c90138c1389003469", "tabbable": null, "tooltip": null, "value": []}}, "475ad6f8eff849c3880bfca9481963e0": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}, "586d6d7ce27c4d6c90138c1389003469": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "ButtonStyleModel", "state": {"_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "ButtonStyleModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "StyleView", "button_color": null, "font_family": null, "font_size": null, "font_style": null, "font_variant": null, "font_weight": null, "text_color": null, "text_decoration": null}}, "5b31cdd50fdc4e73bd00aa9320ea553f": {"model_module": "@jupyter-widgets\/output", "model_module_version": "1.0.0", "model_name": "OutputModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/output", "_model_module_version": "1.0.0", "_model_name": "OutputModel", "_view_count": null, "_view_module": "@jupyter-widgets\/output", "_view_module_version": "1.0.0", "_view_name": "OutputView", "layout": "IPY_MODEL_475ad6f8eff849c3880bfca9481963e0", "msg_id": "", "outputs": [], "tabbable": null, "tooltip": null}}, "85cfc4168cb14a1b86befe4bfccfad6f": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}}, "version_major": 2, "version_minor": 0}
+{"state": {"0263922201e3481db58df1d43e725b4d": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "HBoxModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "HBoxModel", "_view_count": null, "_view_module": "@jupyter-widgets\/controls", "_view_module_version": "2.0.0", "_view_name": "HBoxView", "box_style": "", "children": ["IPY_MODEL_0521caeaf1c849e088d052ddf7c393c4", "IPY_MODEL_af12e49dc61340f0b66fb7825bb99f3f"], "layout": "IPY_MODEL_ed48bcbb8708427f81b70065733be93f", "tabbable": null, "tooltip": null}}, "0521caeaf1c849e088d052ddf7c393c4": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "FileUploadModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "FileUploadModel", "_view_count": null, "_view_module": "@jupyter-widgets\/controls", "_view_module_version": "2.0.0", "_view_name": "FileUploadView", "accept": ".txt", "button_style": "", "description": "Choisir un fichier .txt", "description_allow_html": false, "disabled": false, "error": "", "icon": "upload", "layout": "IPY_MODEL_eda3f53f4adf44fbb982d3c0a6cf1aa8", "multiple": false, "style": "IPY_MODEL_b59eadfb721840e38cd058aa17802e01", "tabbable": null, "tooltip": null, "value": []}}, "7139c8f1f2a64ac5b647114380a3d126": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}, "87822869e6e64dd5bee70cc808e5d374": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "ButtonStyleModel", "state": {"_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "ButtonStyleModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "StyleView", "button_color": null, "font_family": null, "font_size": null, "font_style": null, "font_variant": null, "font_weight": null, "text_color": null, "text_decoration": null}}, "9132da9570f64e5a97c600811e9c0ab5": {"model_module": "@jupyter-widgets\/output", "model_module_version": "1.0.0", "model_name": "OutputModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/output", "_model_module_version": "1.0.0", "_model_name": "OutputModel", "_view_count": null, "_view_module": "@jupyter-widgets\/output", "_view_module_version": "1.0.0", "_view_name": "OutputView", "layout": "IPY_MODEL_7139c8f1f2a64ac5b647114380a3d126", "msg_id": "", "outputs": [], "tabbable": null, "tooltip": null}}, "ac578289f7ab4977b59e7ac0aeb4524c": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}, "af12e49dc61340f0b66fb7825bb99f3f": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "ButtonModel", "state": {"_dom_classes": [], "_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "ButtonModel", "_view_count": null, "_view_module": "@jupyter-widgets\/controls", "_view_module_version": "2.0.0", "_view_name": "ButtonView", "button_style": "primary", "description": "Lire le fichier", "disabled": true, "icon": "", "layout": "IPY_MODEL_ac578289f7ab4977b59e7ac0aeb4524c", "style": "IPY_MODEL_87822869e6e64dd5bee70cc808e5d374", "tabbable": null, "tooltip": null}}, "b59eadfb721840e38cd058aa17802e01": {"model_module": "@jupyter-widgets\/controls", "model_module_version": "2.0.0", "model_name": "ButtonStyleModel", "state": {"_model_module": "@jupyter-widgets\/controls", "_model_module_version": "2.0.0", "_model_name": "ButtonStyleModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "StyleView", "button_color": null, "font_family": null, "font_size": null, "font_style": null, "font_variant": null, "font_weight": null, "text_color": null, "text_decoration": null}}, "ed48bcbb8708427f81b70065733be93f": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}, "eda3f53f4adf44fbb982d3c0a6cf1aa8": {"model_module": "@jupyter-widgets\/base", "model_module_version": "2.0.0", "model_name": "LayoutModel", "state": {"_model_module": "@jupyter-widgets\/base", "_model_module_version": "2.0.0", "_model_name": "LayoutModel", "_view_count": null, "_view_module": "@jupyter-widgets\/base", "_view_module_version": "2.0.0", "_view_name": "LayoutView", "align_content": null, "align_items": null, "align_self": null, "border_bottom": null, "border_left": null, "border_right": null, "border_top": null, "bottom": null, "display": null, "flex": null, "flex_flow": null, "grid_area": null, "grid_auto_columns": null, "grid_auto_flow": null, "grid_auto_rows": null, "grid_column": null, "grid_gap": null, "grid_row": null, "grid_template_areas": null, "grid_template_columns": null, "grid_template_rows": null, "height": null, "justify_content": null, "justify_items": null, "left": null, "margin": null, "max_height": null, "max_width": null, "min_height": null, "min_width": null, "object_fit": null, "object_position": null, "order": null, "overflow": null, "padding": null, "right": null, "top": null, "visibility": null, "width": null}}}, "version_major": 2, "version_minor": 0}
 </script>
 </html>
