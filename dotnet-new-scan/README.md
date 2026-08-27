@@ -2,8 +2,9 @@
 
 Reprend `dotnet-mvc/` (recherche de plus court chemin par **BFS
 bidirectionnel** sur `dbo.LINE_VIS_EDG`, vues Razor, aucune API, aucun
-JavaScript) et y ajoute **deux pré-calculs** du chapitre 11 de la
-spécification (`docs/Specification-fonctionnelle-PathFinder-CSharp.docx`).
+JavaScript) et y ajoute **trois optimisations** du chapitre 11 de la
+spécification (`docs/Specification-fonctionnelle-PathFinder-CSharp.docx`) :
+§ 11.4 composantes faibles, § 11.5 condensation SCC, § 11.7 graphe en mémoire.
 
 ## § 11.4 — composantes connexes faibles (le « scan »)
 
@@ -29,6 +30,17 @@ Exemple que le § 11.4 seul ne pouvait pas trancher : `X5 → X1` (même île,
 mais aucun chemin en respectant le sens) → la condensation SCC répond
 « aucun chemin » **instantanément**.
 
+## § 11.7 — graphe orienté en mémoire
+
+Au démarrage, tout le graphe est chargé en RAM en tableaux **CSR**
+(Compressed Sparse Row, indexés par entier : ~12 Mo pour 100 000 nœuds,
+~350 Mo pour 2 M). Le BFS bidirectionnel s'exécute alors **entièrement en
+mémoire** — plus aucun aller-retour SQL par palier.
+
+Mesuré : chargement en **740 ms**, recherche en **~8–10 ms** (contre des
+dizaines à des centaines de ms avec le BFS SQL). Chargé en tâche de fond ;
+repli automatique sur le BFS SQL tant qu'il n'est pas prêt.
+
 ## Ordre des vérifications (HomeController)
 
 1. **condensation SCC** (§ 11.5) — exacte. `NotReachable` → « aucun chemin »,
@@ -36,7 +48,8 @@ mais aucun chemin en respectant le sens) → la condensation SCC répond
    en afficher le tracé.
 2. sinon (SCC pas calculée) → **composantes faibles** (§ 11.4). Îles
    différentes → « aucun chemin », sans BFS.
-3. sinon → **BFS bidirectionnel** sur `LINE_VIS_EDG` (comme `dotnet-mvc/`).
+3. sinon → **BFS bidirectionnel** — sur le **graphe en mémoire** (§ 11.7) s'il
+   est chargé, sinon par requêtes SQL palier par palier (comme `dotnet-mvc/`).
 
 ```
 dotnet-new-scan/
@@ -54,6 +67,8 @@ dotnet-new-scan/
 ├── Services/
 │   ├── GraphScanService.cs           # § 11.4 — Union-Find, AUCUNE requête SQL
 │   ├── SccCondensationService.cs     # § 11.5 — Kosaraju + graphe condensé, AUCUNE requête SQL
+│   ├── DirectedGraph.cs              # § 11.7 — graphe CSR + BFS bidirectionnel en mémoire
+│   ├── InMemoryGraphService.cs       # § 11.7 — chargement, statut, GraphPreloader (IHostedService)
 │   └── SvgGraphRenderer.cs
 └── Views/Home, Views/Scan, Views/Graphes, wwwroot/css/site.css
 ```
@@ -66,6 +81,7 @@ dotnet-new-scan/
 | `GET /Scan` | statut des deux pré-calculs |
 | `POST /Scan/Run` | (re)calcule les composantes faibles → `dbo.NODE_COMPONENT` |
 | `POST /Scan/RunScc` | (re)calcule la condensation SCC → `dbo.NODE_SCC`, `dbo.SCC_EDGE` |
+| `POST /Scan/ReloadGraph` | (re)charge le graphe orienté en mémoire (§ 11.7) |
 | `GET /Graphes` | galerie illustrée des types de graphes (SVG serveur) |
 
 Aucune route ne renvoie du JSON.
@@ -79,8 +95,9 @@ sont dans les repositories :
 
 | Service (0 SQL) | Repository (tout le SQL) |
 |---|---|
-| `GraphScanService` — Union-Find, verdict | `LineVisEdgRepository.StreamAllEdges()` · `NodeComponentRepository` (ReplaceAll, GetComponentIds) |
-| `SccCondensationService` — Kosaraju, graphe condensé, BFS condensé | `LineVisEdgRepository.StreamAllDirectedEdges()` · `SccRepository` (ReplaceAll, GetSccIds, LoadCondensedAdjacency) |
+| `GraphScanService` — Union-Find, verdict | `LineVisEdgRepository.StreamAllEdges()` · `NodeComponentRepository` |
+| `SccCondensationService` — Kosaraju, graphe condensé | `LineVisEdgRepository.StreamAllDirectedEdges()` · `SccRepository` |
+| `InMemoryGraphService` / `DirectedGraph` — CSR + BFS en mémoire | `LineVisEdgRepository.StreamAllDirectedEdges()` |
 
 ## Tables créées
 

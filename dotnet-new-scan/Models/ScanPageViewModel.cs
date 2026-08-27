@@ -1,4 +1,4 @@
-// ViewModel de la page /Scan : le statut des deux pré-calculs.
+// ViewModel de la page /Scan : le statut des trois optimisations.
 
 using PathFinder.ScanMvc.Services;
 
@@ -11,4 +11,7 @@ public class ScanPageViewModel
 
     // § 11.5 — condensation en composantes fortement connexes (SccCondensationService).
     public SccStatus? Scc { get; set; }
+
+    // § 11.7 — graphe orienté chargé en mémoire (InMemoryGraphService).
+    public GraphStatus? Graph { get; set; }
 }

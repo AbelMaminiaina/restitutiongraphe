@@ -35,6 +35,11 @@ builder.Services.AddSingleton<SvgGraphRenderer>();
 builder.Services.AddSingleton<GraphScanService>();          // § 11.4 — composantes faibles
 builder.Services.AddSingleton<SccCondensationService>();    // § 11.5 — condensation SCC
 
+// § 11.7 — graphe orienté chargé en mémoire, + chargement en tâche de fond
+// au démarrage.
+builder.Services.AddSingleton<InMemoryGraphService>();
+builder.Services.AddHostedService<GraphPreloader>();
+
 // Cache applicatif pour la recherche de chemin : mémorise le résultat par
 // couple (source, cible, maxDepth), y compris les « aucun chemin » (ce sont
 // les recherches les plus coûteuses). SizeLimit borne le nombre d'entrées.

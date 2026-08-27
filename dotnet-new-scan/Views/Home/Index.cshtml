@@ -59,6 +59,10 @@ else if (Model.Searched)
     {
         <div class="banner found">
             ✓ Un chemin existe (@Model.HopCount arête@(Model.HopCount > 1 ? "s" : "")).
+            @if (Model.SolvedInMemory)
+            {
+                <text>&nbsp;<span class="hint">— BFS résolu sur le graphe en mémoire (§ 11.7)</span></text>
+            }
         </div>
 
         @* --- Chaîne des nœuds : source → ... → cible ------------------- *@

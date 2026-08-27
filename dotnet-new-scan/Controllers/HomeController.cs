@@ -5,11 +5,11 @@
 // Ordre des vérifications, du plus précis au plus fragile, avant le BFS :
 //   1. condensation SCC (§ 11.5) : verdict d'existence orientée EXACT.
 //        NotReachable -> « aucun chemin », sans BFS.
-//        Reachable    -> un chemin existe ; on lance quand même le BFS pour
-//                        en récupérer le tracé (chaîne de nœuds + tableau).
 //   2. sinon (SCC pas calculée) : scan des composantes faibles (§ 11.4).
 //        composantes différentes -> « aucun chemin », sans BFS.
-//   3. sinon : BFS bidirectionnel sur LINE_VIS_EDG (comme dotnet-mvc/).
+//   3. sinon : BFS bidirectionnel —
+//        sur le GRAPHE EN MÉMOIRE (§ 11.7) s'il est chargé,
+//        sinon par requêtes SQL palier par palier (comme dotnet-mvc/).
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -24,17 +24,20 @@ public class HomeController : Controller
     private readonly LineVisEdgRepository _repository;
     private readonly GraphScanService _scan;
     private readonly SccCondensationService _sccService;
+    private readonly InMemoryGraphService _graph;
     private readonly IMemoryCache _cache;
 
     public HomeController(
         LineVisEdgRepository repository,
         GraphScanService scan,
         SccCondensationService sccService,
+        InMemoryGraphService graph,
         IMemoryCache cache)
     {
         _repository = repository;
         _scan = scan;
         _sccService = sccService;
+        _graph = graph;
         _cache = cache;
     }
 
@@ -69,24 +72,33 @@ public class HomeController : Controller
         var cacheKey = $"path:{model.Source}:{model.Target}:{effectiveMaxDepth}";
         model.FromCache = _cache.TryGetValue(cacheKey, out _);
 
+        var solvedInMemory = false;
+
         var result = _cache.GetOrCreate(cacheKey, entry =>
         {
             entry.Size = 1;
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
 
             if (sccReach == SccReach.NotReachable)
-                return new ShortestPathResult([], false); // NON exact, pas de BFS
+                return new ShortestPathResult([], false);
 
             if (weakVerdict == ComponentVerdict.DifferentComponents)
-                return new ShortestPathResult([], false); // NON (îles différentes), pas de BFS
+                return new ShortestPathResult([], false);
 
-            // SCC Reachable / Unavailable, îles identiques ou inconnues :
-            // le BFS reste la source de vérité (et fournit le tracé du chemin).
+            // BFS : graphe en mémoire (§ 11.7) si chargé, sinon SQL.
+            var inMemory = _graph.ShortestPath(model.Source, model.Target, effectiveMaxDepth);
+            if (inMemory is not null)
+            {
+                solvedInMemory = true;
+                return inMemory;
+            }
+
             return _repository.ShortestPath(model.Source, model.Target, effectiveMaxDepth);
         })!;
 
         model.Found = result.Found;
         model.Path = result.Path;
+        model.SolvedInMemory = solvedInMemory;
         model.SkippedByScc = !result.Found && sccReach == SccReach.NotReachable;
         model.SkippedByScan = !result.Found && sccReach != SccReach.NotReachable
                               && weakVerdict == ComponentVerdict.DifferentComponents;

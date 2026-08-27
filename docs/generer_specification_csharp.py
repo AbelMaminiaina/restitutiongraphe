@@ -194,7 +194,7 @@ doc.add_paragraph()
 doc.add_paragraph()
 table([
     ["Champ", "Valeur"],
-    ["Version", "3.3"],
+    ["Version", "3.4"],
     ["Date", "2026-08-28"],
     ["Périmètre", "dossier dotnet-mvc/ du dépôt restitutiondonnees"],
     ["Style d'implémentation", "ASP.NET Core MVC (Controllers + vues Razor .cshtml)"],
@@ -211,9 +211,10 @@ p("Évolutions : v1.0 décrivait dotnet-angular-mvc/ (API + Angular). v2.0 a "
   "(chapitre 2) et ajoute le chapitre 11, « Pistes d'amélioration de la base "
   "de données » (indexation, table d'arêtes normalisée, pré-calcul des "
   "composantes, graphe en mémoire). v3.1–3.2 détaillent le « scan » du § 11.4 "
-  "(analogie des îles, code Union-Find). v3.3 détaille et implémente le § 11.5 "
-  "(condensation SCC : Kosaraju, graphe condensé, verdict d'existence orientée "
-  "exact) dans dotnet-new-scan/.", italic=True)
+  "(analogie des îles, code Union-Find). v3.3 implémente le § 11.5 "
+  "(condensation SCC : Kosaraju, verdict d'existence orientée exact). v3.4 "
+  "implémente le § 11.7 (graphe orienté chargé en mémoire, CSR, BFS sans "
+  "SQL) — tout cela dans dotnet-new-scan/.", italic=True)
 
 page_break()
 
@@ -1171,11 +1172,11 @@ p("Ce chapitre liste des évolutions possibles. Elles ne changent aucune règle 
   "performance (surtout celle de la recherche d'EXISTENCE d'un chemin) "
   "s'améliore. Comme tout l'accès aux données est isolé dans "
   "LineVisEdgRepository, chacune est un changement localisé.")
-p("Les § 11.4 (pré-calcul des composantes faibles — « le scan ») ET § 11.5 "
-  "(condensation SCC — verdict d'existence orientée exact) sont implémentés "
-  "dans le dossier dotnet-new-scan/ : même projet MVC que dotnet-mvc/, plus "
-  "les services GraphScanService et SccCondensationService et une page /Scan. "
-  "Les § 11.6–11.8 restent des recommandations.", italic=True)
+p("Les § 11.4 (composantes faibles), § 11.5 (condensation SCC) ET § 11.7 "
+  "(graphe en mémoire) sont implémentés dans le dossier dotnet-new-scan/ : "
+  "même projet MVC que dotnet-mvc/, plus les services GraphScanService, "
+  "SccCondensationService, InMemoryGraphService et une page /Scan. Les § 11.2, "
+  "11.3, 11.6, 11.8 restent des recommandations.", italic=True)
 
 h2("11.1 Constat sur la structure actuelle")
 bullet([
@@ -1506,20 +1507,55 @@ bullet([
     "maintenance plus complexe.",
 ])
 
-h2("11.7 Charger le graphe en mémoire au démarrage")
-p("Environ 500 000 arêtes × 2 identifiants tiennent sans peine en RAM "
-  "(quelques dizaines de méga-octets).")
+h2("11.7 Graphe en mémoire au démarrage — IMPLÉMENTÉ")
+p("Le coût réel du BFS n'est pas le calcul mais les allers-retours SQL : une "
+  "salve de requêtes par palier, dont le nombre croît avec la taille des "
+  "frontières. À grande échelle (2 000 000 de nœuds) c'est le facteur "
+  "limitant. La solution : charger tout le graphe orienté en RAM une fois, et "
+  "y exécuter le BFS sans plus jamais toucher la base.")
+
+h3("11.7.1 Représentation — CSR (Compressed Sparse Row)")
+p("Les nœuds sont indexés par un entier (0..n-1). Le graphe tient dans quatre "
+  "tableaux d'entiers :")
+code(
+    "_fwdOffset[n+1]  _fwdTarget[m]   ->  successeurs de u = _fwdTarget[_fwdOffset[u] .. _fwdOffset[u+1]]\n"
+    "_revOffset[n+1]  _revSource[m]   ->  predecesseurs de u = _revSource[_revOffset[u] .. _revOffset[u+1]]",
+    "CSR — adjacence directe et inverse")
+table([
+    ["Volumétrie", "Tableaux CSR", "+ noms des nœuds"],
+    ["100 000 nœuds / 400 000 arêtes", "~4 Mo", "~12 Mo au total (mesuré)"],
+    ["2 000 000 nœuds / 8 000 000 arêtes", "~80 Mo", "~300–400 Mo (estimation)"],
+], font=9)
+
+h3("11.7.2 Chargement et BFS")
 bullet([
-    "Au démarrage : un seul SELECT SourceId, TargetId FROM dbo.EDGE, puis "
-    "construction de listes d'adjacence directe ET inverse en mémoire.",
-    "Le BFS bidirectionnel s'exécute alors entièrement en mémoire : plus "
-    "aucun aller-retour SQL par palier, latence divisée par un à deux ordres "
-    "de grandeur.",
-    "Rechargement périodique, ou sur notification de changement de la table.",
-    "C'est en général l'amélioration au meilleur rapport gain / effort, et "
-    "elle se combine avec le pré-calcul des composantes (calculé sur le même "
-    "graphe en mémoire).",
+    "Au démarrage : GraphPreloader (IHostedService) appelle InMemoryGraphService"
+    ".Reload() en tâche de fond — le serveur répond tout de suite, les "
+    "premières recherches utilisent le BFS SQL jusqu'à ce que le graphe soit "
+    "prêt. Mesuré : 740 ms pour 100 000 nœuds.",
+    "Reload() lit LineVisEdgRepository.StreamAllDirectedEdges() (le seul SQL, "
+    "dans le repository) et construit le CSR. Rejouable via POST /Scan/ReloadGraph.",
+    "DirectedGraph.ShortestPath : le même BFS bidirectionnel, sur les tableaux "
+    "CSR, avec des Dictionary<int,int> pour forwardPrev / backwardNext. Aucune "
+    "requête. Plafond porté à 300 000 nœuds par sens (plus de latence à "
+    "craindre, seulement de la RAM transitoire).",
+    "HomeController : si le graphe est chargé, le BFS en mémoire ; sinon, repli "
+    "sur le BFS SQL. Résultat identique.",
 ])
+
+h3("11.7.3 Gain mesuré (dotnet-new-scan/)")
+table([
+    ["", "BFS SQL (dotnet-mvc/)", "BFS en mémoire (§ 11.7)"],
+    ["Coût par palier", "~120 requêtes SQL", "parcours de tableaux"],
+    ["Latence d'une recherche", "dizaines à centaines de ms", "~8–10 ms (mesuré)"],
+    ["Sensible à la taille du graphe", "oui (frontières → plus de requêtes)", "non (borné par maxDepth / plafond)"],
+], font=8.5)
+p("Le graphe en mémoire est aussi la base commune des autres pré-calculs "
+  "(§ 11.4, § 11.5), qui pourraient s'exécuter dessus au lieu de relire la "
+  "table.")
+p("Fichiers : dotnet-new-scan/Services/DirectedGraph.cs (CSR + BFS), "
+  "dotnet-new-scan/Services/InMemoryGraphService.cs (chargement, statut, "
+  "GraphPreloader).")
 
 h2("11.8 Autres pistes")
 bullet([
@@ -1546,8 +1582,8 @@ table([
      "élevé", "maximal — BFS sur le petit DAG condensé"],
     ["Réponse O(1) pré-calculée", "fermeture transitive du DAG condensé "
      "(§ 11.6)", "élevé", "maximal (lecture directe)"],
-    ["Supprimer la latence SQL", "graphe en mémoire (§ 11.7)", "moyen",
-     "très élevé — plus d'aller-retour par palier"],
+    ["Supprimer la latence SQL du BFS", "graphe en mémoire (§ 11.7) — IMPLÉMENTÉ",
+     "moyen", "très élevé — ~10 ms/recherche au lieu de dizaines à centaines"],
     ["Chemin natif optimisé", "base graphe dédiée (§ 11.8)", "élevé",
      "élevé, mais nouvelle infrastructure"],
 ], font=8.5)
@@ -1683,7 +1719,9 @@ table([
      "+ NodeComponentRepository — IMPLÉMENTÉ"],
     ["§ 11.5 (condensation SCC)", "dotnet-new-scan/", "SccCondensationService "
      "(Kosaraju) + SccRepository — IMPLÉMENTÉ"],
-    ["Chapitre 11 (§ 11.2–11.3, 11.6–11.8)", "—", "recommandations, non implémentées"],
+    ["§ 11.7 (graphe en mémoire)", "dotnet-new-scan/", "DirectedGraph (CSR + BFS) "
+     "+ InMemoryGraphService + GraphPreloader — IMPLÉMENTÉ"],
+    ["Chapitre 11 (§ 11.2–11.3, 11.6, 11.8)", "—", "recommandations, non implémentées"],
 ], font=8.5)
 
 h2("15.2 Cas de test de recette")

@@ -65,8 +65,35 @@ else
     <button type="submit" class="btn btn-primary">@(Model.Scc is null ? "Lancer" : "Relancer") — condensation SCC</button>
 </form>
 
+@* ---------------------------------------------------------------- § 11.7 *@
+<h2>3. Graphe en mémoire &nbsp;<span class="hint">(§ 11.7)</span></h2>
+<p class="hint">
+    Charge tout le graphe orienté en RAM au démarrage (tableaux CSR indexés par
+    entier). Le BFS bidirectionnel tourne alors <strong>entièrement en
+    mémoire</strong> — plus aucun aller-retour SQL par palier, latence divisée
+    par 10 à 100. Rechargé en tâche de fond au lancement de l'application.
+</p>
+@if (Model.Graph is null)
+{
+    <div class="banner not-found">
+        Pas encore chargé (chargement en cours, ou échec). La recherche utilise
+        le BFS SQL en attendant.
+    </div>
+}
+else
+{
+    <table class="edges"><tbody>
+        <tr><td>Chargé (UTC)</td><td>@Model.Graph.LoadedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") &nbsp;(@Model.Graph.DurationMs ms)</td></tr>
+        <tr><td>Nœuds / arêtes</td><td>@Model.Graph.NodeCount.ToString("N0") / @Model.Graph.EdgeCount.ToString("N0")</td></tr>
+        <tr><td>Empreinte mémoire (~)</td><td>@((Model.Graph.ApproximateBytes / (1024 * 1024)).ToString("N0")) Mo</td></tr>
+    </tbody></table>
+}
+<form method="post" asp-controller="Scan" asp-action="ReloadGraph" class="toolbar">
+    <button type="submit" class="btn btn-primary">@(Model.Graph is null ? "Charger" : "Recharger") — graphe en mémoire</button>
+</form>
+
 <p class="hint">
     À relancer après toute modification de <code>LINE_VIS_EDG</code>. Ordre
-    d'utilisation dans la recherche : la condensation SCC (exacte) prime ; à
-    défaut, les composantes faibles ; à défaut, le BFS seul.
+    d'utilisation dans la recherche : condensation SCC (exacte) → composantes
+    faibles → BFS (en mémoire si chargé, sinon SQL).
 </p>

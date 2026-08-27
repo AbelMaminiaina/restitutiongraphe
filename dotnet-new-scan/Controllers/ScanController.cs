@@ -1,11 +1,12 @@
-// Controller (MVC) : la page des pré-calculs.
+// Controller (MVC) : la page des optimisations.
 //
-// GET  /Scan          -> statut des deux pré-calculs + boutons pour (re)lancer.
-// POST /Scan/Run      -> composantes connexes faibles (§ 11.4, GraphScanService)
-// POST /Scan/RunScc   -> condensation SCC              (§ 11.5, SccCondensationService)
+// GET  /Scan             -> statut des trois optimisations + boutons.
+// POST /Scan/Run         -> composantes connexes faibles (§ 11.4)
+// POST /Scan/RunScc      -> condensation SCC              (§ 11.5)
+// POST /Scan/ReloadGraph -> (re)charge le graphe en mémoire (§ 11.7)
 //
-// Ce n'est pas une API : Index renvoie une vue Razor, les Run* redirigent
-// (POST-redirect-GET). Le déclenchement est en POST parce qu'il modifie la base.
+// Ce n'est pas une API : Index renvoie une vue Razor, les actions redirigent
+// (POST-redirect-GET).
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,11 +19,13 @@ public class ScanController : Controller
 {
     private readonly GraphScanService _scan;
     private readonly SccCondensationService _scc;
+    private readonly InMemoryGraphService _graph;
 
-    public ScanController(GraphScanService scan, SccCondensationService scc)
+    public ScanController(GraphScanService scan, SccCondensationService scc, InMemoryGraphService graph)
     {
         _scan = scan;
         _scc = scc;
+        _graph = graph;
     }
 
     [HttpGet]
@@ -30,6 +33,7 @@ public class ScanController : Controller
     {
         Weak = _scan.Last,
         Scc = _scc.Last,
+        Graph = _graph.Status,
     });
 
     [HttpPost]
@@ -52,6 +56,17 @@ public class ScanController : Controller
             $"Condensation SCC : {s.DurationMs} ms — {s.SccCount:N0} SCC, "
             + $"graphe condensé {s.CondensedEdgeCount:N0} arêtes, plus grande SCC "
             + $"{s.LargestSccSize:N0} nœuds.";
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult ReloadGraph()
+    {
+        var s = _graph.Reload();
+        TempData["ScanMessage"] =
+            $"Graphe en mémoire : {s.DurationMs} ms — {s.NodeCount:N0} nœuds, "
+            + $"{s.EdgeCount:N0} arêtes, ~{s.ApproximateBytes / (1024 * 1024):N0} Mo.";
         return RedirectToAction(nameof(Index));
     }
 }

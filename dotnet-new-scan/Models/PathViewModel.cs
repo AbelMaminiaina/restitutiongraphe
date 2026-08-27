@@ -32,6 +32,10 @@ public class PathViewModel
     // true si le résultat provenait du cache applicatif (5 min).
     public bool FromCache { get; set; }
 
+    // true si le BFS a été résolu sur le graphe en mémoire (§ 11.7) plutôt
+    // que par des requêtes SQL palier par palier.
+    public bool SolvedInMemory { get; set; }
+
     // Nombre d'arêtes du chemin (0 si source == cible).
     public int HopCount => Path.Count > 0 ? Path.Count - 1 : 0;
 }

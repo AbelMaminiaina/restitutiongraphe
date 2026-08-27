@@ -375,7 +375,7 @@ table(s, [
     ["Table EDGE normalisée", "pré-dériver Direction : EDGE(SourceId, TargetId)", "requêtes BFS triviales", "recommandé"],
     ["Pré-calcul des composantes", "1 scan → ComponentId par nœud (Union-Find)", "aucun chemin en O(1)", "IMPLÉMENTÉ (dotnet-new-scan/)"],
     ["Condensation SCC", "contracter les cycles → DAG + atteignabilité", "OUI/NON exact sans BFS", "IMPLÉMENTÉ (dotnet-new-scan/)"],
-    ["Graphe en mémoire", "charger EDGE au démarrage (adjacence + inverse)", "latence SQL ÷ 10-100", "recommandé"],
+    ["Graphe en mémoire", "charger le graphe au démarrage (CSR) — BFS sans SQL", "latence SQL ÷ 10-100", "IMPLÉMENTÉ (dotnet-new-scan/)"],
 ], y=Inches(1.7), font=10.5, col_widths=[2.6, 4.6, 2.9, 2.4])
 footnote(s, "Aucune ne change les règles de gestion. Accès données isolé dans "
             "LineVisEdgRepository → chaque piste est un changement localisé. "
@@ -497,17 +497,40 @@ footnote(s, "Gain sur le § 11.4 : X5 → X1 (même île, mais pas de chemin dan
             "sens) → « aucun chemin » exact et immédiat. Le § 11.4 renvoyait au BFS.")
 
 # ======================================================================
-# 19 — Synthese
+# 19 — Passage a l'echelle : graphe en memoire (§ 11.7)
+# ======================================================================
+s = new_slide("2 millions de nœuds : le graphe en mémoire", "Zoom (§ 11.7, dotnet-new-scan/)")
+bullets(s, [
+    "Le coût du BFS n'est pas le calcul, ce sont les allers-retours SQL "
+    "(une salve de requêtes par palier).",
+    "Solution : charger tout le graphe orienté en RAM au démarrage, "
+    "en tableaux CSR indexés par entier.",
+    "Le BFS bidirectionnel tourne alors 100 % en mémoire — aucune requête.",
+    "Chargement en tâche de fond ; repli sur le BFS SQL tant qu'il n'est "
+    "pas prêt ; rechargeable via /Scan.",
+], x=LX, y=Inches(1.8), w=Inches(6.5), size=13)
+table(s, [
+    ["", "BFS SQL", "BFS en mémoire"],
+    ["par palier", "~120 requêtes", "parcours de tableaux"],
+    ["latence / recherche", "dizaines–centaines ms", "~8–10 ms (mesuré)"],
+    ["sensible à la taille", "oui", "non"],
+    ["RAM (100 k / 2 M nœuds)", "—", "~12 Mo / ~350 Mo"],
+], x=Inches(7.4), y=Inches(2.0), w=Inches(5.4), font=10, col_widths=[3, 3, 3])
+footnote(s, "Chargé en 740 ms pour 100 000 nœuds. Fichiers : "
+            "Services/DirectedGraph.cs (CSR + BFS) · Services/InMemoryGraphService.cs.")
+
+# ======================================================================
+# 20 — Synthese
 # ======================================================================
 s = new_slide("Synthèse", None)
 table(s, [
     ["Aspect", "En bref"],
     ["Le graphe", "orienté, non pondéré, creux, cyclique possible, non connexe, ~100 000 nœuds"],
     ["Le besoin", "existence + plus court chemin — résolus ensemble par un seul BFS"],
-    ["L'algorithme", "BFS bidirectionnel par paliers, exécuté en SQL, borné, résultat en cache 5 min"],
+    ["L'algorithme", "BFS bidirectionnel, borné, résultat en cache 5 min"],
     ["Pas Dijkstra / A* / Floyd-Warshall", "problème plus dur (poids, toutes paires), coût supérieur, sans bénéfice ici"],
-    ["Pré-calculs (dotnet-new-scan/)", "§ 11.4 composantes faibles (NON certain) · § 11.5 condensation SCC (OUI/NON exact sans BFS)"],
-], y=Inches(1.9), font=12, col_widths=[3.4, 8.6])
+    ["dotnet-new-scan/ (ch. 11)", "§ 11.4 composantes faibles · § 11.5 condensation SCC (OUI/NON exact) · § 11.7 graphe en mémoire (BFS sans SQL)"],
+], y=Inches(1.9), font=11.5, col_widths=[3.2, 8.8])
 
 prs.save(OUT)
 print(f"OK -> {OUT}  ({len(prs.slides)} diapositives)")
