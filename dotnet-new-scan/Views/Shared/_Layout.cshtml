@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@(ViewData["Title"] ?? "Recherche de chemin") — MVC Razor + Scan</title>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+    <header class="site-header">
+        <h1>PathFinder + Scan — ASP.NET Core MVC (Razor, sans JavaScript)</h1>
+        <nav class="site-nav">
+            <a asp-controller="Home" asp-action="Index">Recherche de chemin</a>
+            <a asp-controller="Scan" asp-action="Index">Scan des composantes</a>
+            <a asp-controller="Graphes" asp-action="Index">Types de graphes</a>
+        </nav>
+    </header>
+    <main class="container">
+        @RenderBody()
+    </main>
+    <footer class="site-footer">
+        Rendu entièrement côté serveur (vues Razor). Aucun JavaScript, aucun
+        framework front. BFS bidirectionnel + pré-calcul des composantes connexes
+        (§ 11.4 de la spécification).
+    </footer>
+</body>
+</html>

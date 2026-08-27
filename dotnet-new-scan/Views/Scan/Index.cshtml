@@ -1,0 +1,72 @@
+@model PathFinder.ScanMvc.Models.ScanPageViewModel
+@{
+    ViewData["Title"] = "Pré-calculs (scan)";
+}
+
+<p class="hint">
+    Deux pré-calculs, indépendants, accélèrent la recherche d'existence d'un
+    chemin. Chacun balaie <code>LINE_VIS_EDG</code> une fois et écrit ses
+    propres tables.
+</p>
+
+@if (TempData["ScanMessage"] is string msg)
+{
+    <div class="banner found">@msg</div>
+}
+
+@* ---------------------------------------------------------------- § 11.4 *@
+<h2>1. Composantes connexes faibles &nbsp;<span class="hint">(§ 11.4)</span></h2>
+<p class="hint">
+    Regroupe les nœuds par « île » (sens des arêtes ignoré, via Union-Find) dans
+    <code>dbo.NODE_COMPONENT</code>. Deux nœuds sur des îles différentes ⇒
+    <strong>aucun chemin, en O(1)</strong>. Ne tranche pas le cas « même île ».
+</p>
+@if (Model.Weak is null)
+{
+    <div class="banner not-found">Jamais exécuté.</div>
+}
+else
+{
+    <table class="edges"><tbody>
+        <tr><td>Dernier calcul (UTC)</td><td>@Model.Weak.CompletedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") &nbsp;(@Model.Weak.DurationMs ms)</td></tr>
+        <tr><td>Nœuds / arêtes</td><td>@Model.Weak.NodeCount.ToString("N0") / @Model.Weak.EdgeCount.ToString("N0")</td></tr>
+        <tr><td>Composantes faibles</td><td>@Model.Weak.ComponentCount.ToString("N0")</td></tr>
+        <tr><td>Plus grande</td><td>@Model.Weak.LargestComponentSize.ToString("N0") nœuds</td></tr>
+    </tbody></table>
+}
+<form method="post" asp-controller="Scan" asp-action="Run" class="toolbar">
+    <button type="submit" class="btn btn-primary">@(Model.Weak is null ? "Lancer" : "Relancer") — composantes faibles</button>
+</form>
+
+@* ---------------------------------------------------------------- § 11.5 *@
+<h2>2. Condensation SCC &nbsp;<span class="hint">(§ 11.5)</span></h2>
+<p class="hint">
+    Calcule les composantes <strong>fortement</strong> connexes (Kosaraju), les
+    contracte en super-nœuds → un petit graphe condensé (un DAG) dans
+    <code>dbo.NODE_SCC</code> et <code>dbo.SCC_EDGE</code>. Donne un
+    <strong>OUI/NON exact</strong> pour l'existence d'un chemin orienté, sans
+    BFS sur le graphe d'origine.
+</p>
+@if (Model.Scc is null)
+{
+    <div class="banner not-found">Jamais exécuté.</div>
+}
+else
+{
+    <table class="edges"><tbody>
+        <tr><td>Dernier calcul (UTC)</td><td>@Model.Scc.CompletedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") &nbsp;(@Model.Scc.DurationMs ms)</td></tr>
+        <tr><td>Nœuds / arêtes orientées</td><td>@Model.Scc.NodeCount.ToString("N0") / @Model.Scc.EdgeCount.ToString("N0")</td></tr>
+        <tr><td>Composantes fortement connexes</td><td>@Model.Scc.SccCount.ToString("N0")</td></tr>
+        <tr><td>Graphe condensé</td><td>@Model.Scc.SccCount.ToString("N0") super-nœuds, @Model.Scc.CondensedEdgeCount.ToString("N0") arêtes</td></tr>
+        <tr><td>Plus grande SCC</td><td>@Model.Scc.LargestSccSize.ToString("N0") nœuds</td></tr>
+    </tbody></table>
+}
+<form method="post" asp-controller="Scan" asp-action="RunScc" class="toolbar">
+    <button type="submit" class="btn btn-primary">@(Model.Scc is null ? "Lancer" : "Relancer") — condensation SCC</button>
+</form>
+
+<p class="hint">
+    À relancer après toute modification de <code>LINE_VIS_EDG</code>. Ordre
+    d'utilisation dans la recherche : la condensation SCC (exacte) prime ; à
+    défaut, les composantes faibles ; à défaut, le BFS seul.
+</p>

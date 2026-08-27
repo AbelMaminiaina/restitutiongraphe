@@ -1,0 +1,18 @@
+@model IReadOnlyList<string>
+@{
+    ViewData["Title"] = "Images construites";
+}
+
+<div class="banner found">
+    @Model.Count image@(Model.Count > 1 ? "s" : "") SVG écrite@(Model.Count > 1 ? "s" : "")
+    dans <code>wwwroot/img/graphes/</code>.
+</div>
+
+<ul class="file-list">
+    @foreach (var file in Model)
+    {
+        <li><a href="@Url.Content("~/" + file)">@file</a></li>
+    }
+</ul>
+
+<p><a href="@Url.Action("Index")" class="btn btn-ghost">← Retour à la galerie</a></p>

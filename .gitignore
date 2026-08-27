@@ -12,3 +12,6 @@ __pycache__/
 # Node (si jamais un tooling frontend revient)
 node_modules/
 dist/
+
+# Fichiers de verrouillage Office
+~$*

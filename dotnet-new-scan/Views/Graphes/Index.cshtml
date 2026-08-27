@@ -1,0 +1,31 @@
+@model IReadOnlyList<GraphSample>
+@{
+    ViewData["Title"] = "Types de graphes";
+}
+
+<p class="hint">
+    Illustrations construites entièrement côté serveur (SVG, aucun JavaScript).
+    Chaque image est aussi accessible seule à l'adresse
+    <code>/Graphes/Image/{slug}</code>. Pour les écrire en fichiers dans
+    <code>wwwroot/img/graphes/</code> :
+    <a href="@Url.Action("Build")">construire les images</a>.
+</p>
+
+<div class="gallery">
+    @foreach (var g in Model)
+    {
+        <figure class="graph-card">
+            <img src="@Url.Action("Image", new { id = g.Slug })"
+                 alt="Illustration : @g.Name" loading="lazy" />
+            <figcaption>
+                <strong>@g.Name</strong>
+                <span class="meta">
+                    @g.NodeCount nœuds · @g.EdgeCount arêtes ·
+                    @(g.Directed ? "orienté" : "non orienté") ·
+                    @(g.Weighted ? "pondéré" : "non pondéré")
+                </span>
+                <p>@g.Description</p>
+            </figcaption>
+        </figure>
+    }
+</div>

@@ -1,0 +1,6 @@
+# .NET
+bin/
+obj/
+
+# SVG générés par la route /Graphes/Build (reconstruire, pas committer)
+/wwwroot/img/graphes/

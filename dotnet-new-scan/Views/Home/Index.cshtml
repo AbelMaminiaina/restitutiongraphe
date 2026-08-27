@@ -1,0 +1,114 @@
+@model PathViewModel
+@{
+    ViewData["Title"] = "Recherche de chemin";
+}
+
+<p class="hint">
+    Vérifie s'il existe un chemin orienté entre deux nœuds de la base complète
+    (table <code>LINE_VIS_EDG</code>), et affiche le plus court. Le formulaire
+    est soumis en <code>GET</code> : l'URL du résultat est partageable.
+    Avant le BFS, les <a asp-controller="Scan" asp-action="Index">pré-calculs</a>
+    (composantes faibles § 11.4, condensation SCC § 11.5) tranchent le
+    « aucun chemin » sans parcours.
+</p>
+
+@* <form method="get"> : soumission HTML classique, la page se recharge avec
+   ?source=...&target=... dans l'URL. Aucun JavaScript. *@
+<form method="get" action="@Url.Action("Index")" class="toolbar">
+    <label class="field">
+        Source
+        <input type="text" name="source" value="@Model.Source"
+               placeholder="ex: N1" autocomplete="off" autofocus />
+    </label>
+    <label class="field">
+        Cible
+        <input type="text" name="target" value="@Model.Target"
+               placeholder="ex: N50000" autocomplete="off" />
+    </label>
+    <button type="submit" class="btn btn-primary">Chercher</button>
+    <a href="@Url.Action("Index")" class="btn btn-ghost">Effacer</a>
+</form>
+
+@if (Model.InputError is not null)
+{
+    <div class="banner not-found">@Model.InputError</div>
+}
+else if (Model.Searched)
+{
+    @if (!Model.Found)
+    {
+        <div class="banner not-found">
+            ✗ Aucun chemin de « @Model.Source » vers « @Model.Target »
+            @if (Model.SkippedByScc)
+            {
+                <text>— la condensation SCC prouve qu'aucun chemin orienté
+                n'existe (verdict <strong>exact</strong>, <strong>sans BFS</strong>).</text>
+            }
+            else if (Model.SkippedByScan)
+            {
+                <text>— les deux nœuds sont dans des composantes connexes
+                différentes (détecté par le scan, <strong>sans BFS</strong>).</text>
+            }
+            else
+            {
+                <text>(nœud inexistant, ou pas de chemin en 20 paliers maximum).</text>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="banner found">
+            ✓ Un chemin existe (@Model.HopCount arête@(Model.HopCount > 1 ? "s" : "")).
+        </div>
+
+        @* --- Chaîne des nœuds : source → ... → cible ------------------- *@
+        <div class="chain">
+            @for (var i = 0; i < Model.Path.Count; i++)
+            {
+                @if (i > 0)
+                {
+                    <span class="arrow">→</span>
+                }
+                var css = i == 0 ? "chip chip-start"
+                        : i == Model.Path.Count - 1 ? "chip chip-end"
+                        : "chip";
+                <span class="@css">@Model.Path[i]</span>
+            }
+        </div>
+
+        @* --- Tableau détaillé : une ligne par arête ------------------- *@
+        @if (Model.Edges.Count > 0)
+        {
+            <table class="edges">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>De</th>
+                        <th>Vers</th>
+                        <th>Transformation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var edge in Model.Edges)
+                    {
+                        <tr>
+                            <td class="num">@edge.Index</td>
+                            <td>@edge.From</td>
+                            <td>@edge.To</td>
+                            <td>@(edge.Transformation ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="hint">Chemin de longueur 0 : la source et la cible sont le même nœud.</p>
+        }
+    }
+
+    @if (Model.FromCache)
+    {
+        <p class="hint">Résultat servi depuis le cache applicatif (5 min).</p>
+    }
+}
