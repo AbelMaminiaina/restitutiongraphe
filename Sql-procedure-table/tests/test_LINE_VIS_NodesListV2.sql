@@ -114,6 +114,15 @@ SET @ok = CASE WHEN EXISTS (SELECT 1 FROM @res WHERE LIN_UID = 'L001' AND TotalL
 IF @ok = 1 PRINT '  PASS 2.2  L001 + TotalLignes = 1';
 ELSE BEGIN SET @fail += 1; PRINT '  FAIL 2.2  contenu inattendu (LIN_UID / TotalLignes)'; END
 
+-- 2.3 : le filtre reste insensible a la casse (COLLATE retire du code -> on
+-- s'appuie sur la collation CI de la colonne). 'fiadodswrk' doit matcher.
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_NodesListV2 @p_column = 'fiadodswrk';
+SET @n = (SELECT COUNT(*) FROM @res);
+IF @n = 1 AND EXISTS (SELECT 1 FROM @res WHERE LIN_UID = 'L001')
+    PRINT '  PASS 2.3  recherche insensible a la casse (fiadodswrk = FIADODSWRK)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 2.3  casse : attendu 1 ligne L001, obtenu ' + CAST(@n AS VARCHAR); END
+
 -------------------------------------------------------------------------------
 PRINT '--- TEST 3 : Cas 2  @p_env = ''ENV1'' (groupes A + C), @p_maxres = 1 ---';
 DELETE FROM @res;

@@ -2,19 +2,35 @@
 --  Procédure dbo.LINE_VIS_NodesListV2
 --  Base : RestitutionGrapheProd
 --
---  Transcrite des captures IMG_5669 / IMG_5670.
---  Adaptations (cohérence avec les objets réellement créés) :
---    - table  dbo.LINE_VIS_EDG_2            -> dbo.LINE_VIS_EDG
---    - index  IX_LINE_VIS_EDG_2_DTA_EDG_DIR -> IX_LINE_VIS_EDG_DTA_EDG_DIR
+--  Transcrite des captures IMG_5669 / IMG_5670, puis optimisée.
+--  Adaptations vs captures :
+--    - table  dbo.LINE_VIS_EDG_2  -> dbo.LINE_VIS_EDG
+--    - suppression du hint INDEX = [IX_LINE_VIS_EDG_2_DTA_EDG_DIR] : il forçait
+--      le plus gros index (645 Mo) et un opérateur Sort de plusieurs secondes.
+--      Sans hint, l'optimiseur prend IX_LINE_VIS_EDG_2_Covering, dont l'ordre
+--      (DTA_1..4, LIN_UID, LNA_UID, EDG_DIR) couvre PARTITION BY + ORDER BY du
+--      ROW_NUMBER -> plus aucun tri.
+--    - suppression de COLLATE French_CI_AS : la base est déjà en
+--      SQL_Latin1_General_CP1_CI_AS (insensible à la casse) ; la clause forçait
+--      un CONVERT ligne par ligne sur des colonnes larges (DTA_3). Le LIKE
+--      reste insensible à la casse via la collation de la colonne.
 --
 --  Renvoie, pour chaque combinaison distincte (DTA_1..DTA_4), la 1re ligne
 --  (LIN_UID/LNA_UID/EDG_DIR mini), limitée à @p_maxres, plus le nombre total
 --  de combinaisons distinctes correspondantes (@TotalLignes).
 --
+--  Perf (table de 1,8 M lignes) :
+--    Cas 1 (aucun critère)      : ~3 ms   -- @TotalLignes lu dans le cache
+--    Cas 2 (>= 1 critère)       : ~2-3 s  -- 1 scan pour le comptage filtré ;
+--                                            la requête de données s'arrête tôt
+--                                            (row goal FETCH/FAST 100).
+--    Le ~2 s résiduel du Cas 2 est le coût incompressible d'une recherche
+--    "LIKE '%...%'" sur 1,8 M lignes (non SARGable). Pour du sous-seconde il
+--    faudrait un index full-text / trigrammes.
+--
 --  Dépendance : dbo.LINE_VIS_EDG_Stats + dbo.LINE_VIS_EDG_RefreshStats
---  (LINE_VIS_EDG_Stats.sql). Le Cas 1 (aucun critère) lit @TotalLignes dans ce
---  cache en O(1) ; sans cache il retombe sur un COUNT(DISTINCT) direct (~2,4 s).
---  Penser à EXEC dbo.LINE_VIS_EDG_RefreshStats après chaque chargement de données.
+--  (LINE_VIS_EDG_Stats.sql). Penser à EXEC dbo.LINE_VIS_EDG_RefreshStats
+--  après chaque chargement de données.
 -- =============================================================================
 
 USE RestitutionGrapheProd;
@@ -57,16 +73,18 @@ BEGIN
             FROM (SELECT DISTINCT DTA_1, DTA_2, DTA_3, DTA_4 FROM dbo.LINE_VIS_EDG) AS AllDistinct;
     END
     ELSE
+        -- Cas 2 : comptage des combinaisons distinctes qui passent les filtres.
+        -- 1 seul scan de l'index couvrant (agrégat en flux, sans tri).
         SELECT @TotalLignes = COUNT(*)
         FROM (
             SELECT DTA_1, DTA_2, DTA_3, DTA_4
-            FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX = [IX_LINE_VIS_EDG_DTA_EDG_DIR])
+            FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
             WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
-            Group by DTA_1, DTA_2, DTA_3, DTA_4
+                (@p_column IS NULL OR @p_column = '' OR DTA_1 LIKE '%' + @p_column + '%')
+            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 LIKE '%' + @p_table  + '%')
+            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 LIKE '%' + @p_schema + '%')
+            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 LIKE '%' + @p_env    + '%')
+            GROUP BY DTA_1, DTA_2, DTA_3, DTA_4
         ) AS FilteredDistinct
 
     IF @AllParamsEmpty = 1
@@ -80,7 +98,7 @@ BEGIN
                     ORDER BY LIN_UID ASC, LNA_UID ASC, EDG_DIR ASC
                 ) AS RowNum
             FROM dbo.LINE_VIS_EDG
-            WHERE DTA_1 COLLATE French_CI_AS LIKE 'f%'
+            WHERE DTA_1 LIKE 'f%'
         )
         SELECT
             DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR, @TotalLignes AS TotalLignes
@@ -92,7 +110,9 @@ BEGIN
     END
     ELSE
     BEGIN
-        -- Cas 2 : Au moins un paramètre est non vide -> Filtres dynamiques
+        -- Cas 2 : Au moins un paramètre est non vide -> Filtres dynamiques.
+        -- Pas de hint d'index : l'optimiseur prend l'index couvrant ordonné
+        -- (aucun tri) et le row goal (FETCH/FAST 100) arrête le scan tôt.
         WITH FilteredData AS (
             SELECT
                 DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR,
@@ -100,12 +120,12 @@ BEGIN
                     PARTITION BY DTA_1, DTA_2, DTA_3, DTA_4
                     ORDER BY LIN_UID ASC, LNA_UID ASC, EDG_DIR ASC
                 ) AS RowNum
-            FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX = [IX_LINE_VIS_EDG_DTA_EDG_DIR])
+            FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
             WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
+                (@p_column IS NULL OR @p_column = '' OR DTA_1 LIKE '%' + @p_column + '%')
+            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 LIKE '%' + @p_table  + '%')
+            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 LIKE '%' + @p_schema + '%')
+            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 LIKE '%' + @p_env    + '%')
         )
         SELECT
             DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR, @TotalLignes AS TotalLignes
