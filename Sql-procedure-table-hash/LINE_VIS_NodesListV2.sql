@@ -4,8 +4,8 @@
 --
 --  Identique à Sql-procedure-table/LINE_VIS_NodesListV2.sql, SAUF que les
 --  clauses PARTITION BY / GROUP BY / ORDER BY portent sur les colonnes
---  calculées DTA_1_k..DTA_4_k (préfixes des DTA_x, cf. LINE_VIS_EDG.sql) au
---  lieu de DTA_1..DTA_4.
+--  DTA_1_k..DTA_4_k (préfixes des DTA_x, cf. LINE_VIS_EDG.sql) au lieu de
+--  DTA_1..DTA_4.
 --
 --  Ne changent PAS :
 --    - les types des colonnes DTA_1..DTA_4 (VARCHAR(1000)/VARCHAR(8000))
@@ -14,18 +14,13 @@
 --    - les colonnes renvoyées (DTA_1, DTA_2, DTA_3, DTA_4 d'origine)
 --    - le résultat (DTA_x_k = DTA_x tant que la valeur tient dans le préfixe)
 --
---  Gain : les 4 colonnes _k sont courtes -> l'index couvrant
---  IX_LINE_VIS_EDG_2_Covering a une clé de 1581 octets (< 1700) : plus
---  d'avertissement "index key > 1700 bytes", et comme il reste ordonné sur
---  (préfixes, LIN_UID, LNA_UID, EDG_DIR) il couvre PARTITION BY + ORDER BY
---  interne + ORDER BY final -> aucun Sort, mêmes perfs qu'avant.
---
---  /!\ PERF : sur 1,8 M lignes cette variante est PLUS LENTE que
---  Sql-procedure-table/ (Cas 1 ~8 s au lieu de ~10 ms ; Cas 2 ~5-13 s au lieu
---  de ~2-3 s). L'optimiseur recalcule DTA_x_k pendant le scan au lieu de le
---  lire dans la clé -> perd l'ordre -> Sort de 1,8 M lignes qui déborde en
---  tempdb. Voir README.md. L'avertissement "> 1700 bytes" disparaît et le
---  résultat est identique, mais l'optimisation n'est pas préservée.
+--  Gain : les 4 colonnes _k sont courtes -> clé de IX_LINE_VIS_EDG_2_Covering =
+--  1581 octets (< 1700) : plus d'avertissement "index key > 1700 bytes".
+--  Comme les _k sont des colonnes RÉELLES (pas calculées -> aucun Compute
+--  Scalar, cf. LINE_VIS_EDG.sql) et que l'index reste ordonné sur (préfixes,
+--  LIN_UID, LNA_UID, EDG_DIR), il couvre PARTITION BY + ORDER BY interne +
+--  ORDER BY final -> aucun Sort, mêmes perfs que Sql-procedure-table/
+--  (Cas 1 ~10 ms, Cas 2 ~2-3 s sur 1,8 M lignes).
 --
 --  Dépendance : dbo.LINE_VIS_EDG_Stats + dbo.LINE_VIS_EDG_RefreshStats.
 -- =============================================================================
@@ -33,11 +28,10 @@
 USE RestitutionGrapheProdHash;
 GO
 
--- Jeu de SET requis pour que l'optimiseur RÉUTILISE l'index sur colonnes
--- calculées DTA_1_k..DTA_4_k (sinon il les recalcule -> perd l'ordre de
--- l'index -> opérateur Sort de plusieurs secondes). Ces 7 options sont figées
--- à la création de la procédure -> exécution toujours correcte, quel que soit
--- le client appelant.
+-- Jeu de SET par convention (identique aux autres scripts du dossier). Les _k
+-- étant des colonnes réelles, l'optimiseur n'a plus besoin d'un jeu d'options
+-- particulier pour garder l'ordre de l'index ; on les fige quand même à la
+-- création de la procédure pour un plan stable quel que soit l'appelant.
 SET ANSI_NULLS ON;
 SET ANSI_PADDING ON;
 SET ANSI_WARNINGS ON;
@@ -59,12 +53,9 @@ CREATE PROCEDURE [dbo].[LINE_VIS_NodesListV2]
     @p_maxres   INT           = 100
 AS
 BEGIN
-    -- ARITHABORT / ANSI_WARNINGS / CONCAT_NULL_YIELDS_NULL ne sont PAS figés à
-    -- la création d'une procédure : ils sont hérités de la session appelante
-    -- (souvent OFF côté ODBC/JDBC). S'ils ne sont pas ON, l'optimiseur refuse
-    -- d'utiliser l'index sur les colonnes calculées DTA_1_k..DTA_4_k et ajoute
-    -- un Sort de plusieurs secondes. On les force ici, en tête de corps, avant
-    -- toute requête -> plan correct quel que soit l'appelant.
+    -- ARITHABORT / ANSI_WARNINGS ne sont pas hérités de façon fiable de la
+    -- session appelante (souvent OFF côté ODBC/JDBC). Ils ne conditionnent plus
+    -- le plan (les _k sont des colonnes réelles), on les force par cohérence.
     SET ARITHABORT ON;
     SET ANSI_WARNINGS ON;
     SET CONCAT_NULL_YIELDS_NULL ON;

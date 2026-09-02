@@ -19,8 +19,7 @@
 USE RestitutionGrapheProdHash;
 GO
 
--- Jeu de SET requis : RefreshStats agrège via les colonnes calculées _k
--- (figé à la création de la procédure -> exécution toujours correcte).
+-- Jeu de SET par convention (identique aux autres scripts du dossier).
 SET ANSI_NULLS ON;
 SET ANSI_PADDING ON;
 SET ANSI_WARNINGS ON;
@@ -55,7 +54,6 @@ CREATE PROCEDURE dbo.LINE_VIS_EDG_RefreshStats
 AS
 BEGIN
     SET NOCOUNT ON;
-    -- requis pour agréger via l'index sur colonnes calculées _k (cf. proc)
     SET ARITHABORT ON;
     SET ANSI_WARNINGS ON;
     SET CONCAT_NULL_YIELDS_NULL ON;

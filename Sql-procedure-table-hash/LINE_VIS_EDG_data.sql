@@ -13,7 +13,8 @@
 USE RestitutionGrapheProdHash;
 GO
 
--- Jeu de SET requis pour INSÉRER dans une table à index sur colonne calculée.
+-- Jeu de SET requis pour INSÉRER dans une table à index sur les colonnes _k
+-- (le trigger dbo.TR_LINE_VIS_EDG_DerivedKeys les recalcule).
 SET ANSI_NULLS ON;
 SET ANSI_PADDING ON;
 SET ANSI_WARNINGS ON;
@@ -25,6 +26,11 @@ GO
 
 -- 1. Vider la table (optionnel)
 TRUNCATE TABLE dbo.LINE_VIS_EDG;
+
+-- On coupe le trigger de maintenance des _k pendant la boucle (il referait
+-- sinon un UPDATE de chaque lot). Elles sont recalculées en une passe après.
+IF OBJECT_ID(N'[dbo].[TR_LINE_VIS_EDG_DerivedKeys]') IS NOT NULL
+    DISABLE TRIGGER dbo.TR_LINE_VIS_EDG_DerivedKeys ON dbo.LINE_VIS_EDG;
 
 -- 2. Générer les lignes avec des clés primaires uniques garanties
 DECLARE @i INT = 1
@@ -132,13 +138,24 @@ BEGIN
         ' : ' + CAST(@i - @BatchSize + 1 AS VARCHAR) + ' à ' + CAST(@i - 1 AS VARCHAR) + ' lignes insérées'
 END
 
--- 3. Vérification finale
+-- 3. Recalcul des clés dérivées en une seule passe, puis on remet le trigger.
+UPDATE dbo.LINE_VIS_EDG
+SET DTA_1_k = CONVERT(VARCHAR(150), SUBSTRING(DTA_1, 1, 150)),
+    DTA_2_k = CONVERT(VARCHAR(80),  SUBSTRING(DTA_2, 1, 80)),
+    DTA_3_k = CONVERT(VARCHAR(500), SUBSTRING(DTA_3, 1, 500)),
+    DTA_4_k = CONVERT(VARCHAR(150), SUBSTRING(DTA_4, 1, 150));
+
+IF OBJECT_ID(N'[dbo].[TR_LINE_VIS_EDG_DerivedKeys]') IS NOT NULL
+    ENABLE TRIGGER dbo.TR_LINE_VIS_EDG_DerivedKeys ON dbo.LINE_VIS_EDG;
+GO
+
+-- 4. Vérification finale
 DECLARE @FinalCount INT
 SELECT @FinalCount = COUNT(*) FROM dbo.LINE_VIS_EDG
 PRINT 'Nombre total : ' + CAST(@FinalCount AS VARCHAR)
 GO
 
--- 4. Rafraichir le cache d'agregats lu par LINE_VIS_NodesListV2 (Cas 1).
+-- 5. Rafraichir le cache d'agregats lu par LINE_VIS_NodesListV2 (Cas 1).
 IF OBJECT_ID(N'[dbo].[LINE_VIS_EDG_RefreshStats]') IS NOT NULL
     EXEC dbo.LINE_VIS_EDG_RefreshStats;
 GO
