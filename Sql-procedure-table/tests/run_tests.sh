@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Lance le test unitaire de dbo.LINE_VIS_NodesListV2 dans une base jetable.
+#  Lance les tests unitaires des procedures LINE_VIS_* dans une base jetable.
 #
 #  1. (re)cree la base de test
-#  2. y deploie LINE_VIS_EDG.sql (table + index) et LINE_VIS_NodesListV2.sql
-#     (les scripts "prod" ciblent RestitutionGrapheProd ; on redirige le nom
-#      vers la base de test par simple substitution de chaine)
-#  3. execute tests/test_LINE_VIS_NodesListV2.sql
+#  2. y deploie les scripts "schema" + "procedures" (ils ciblent
+#     RestitutionGrapheProd ; on redirige le nom vers la base de test par
+#     simple substitution de chaine)
+#  3. execute chaque fichier tests/test_*.sql
 #  4. supprime la base de test (sauf si KEEP=1)
 #
 #  Usage :
@@ -33,6 +33,15 @@ trap 'rm -rf "$TMP"' EXIT
 win() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || echo "$1"; }
 run_file() { "$SQLCMD" -S "$SERVER" -E -C -b -I -i "$(win "$1")"; }
 
+# Scripts a deployer AVANT les tests, dans l'ordre (schema puis procedures).
+DEPLOY=(
+    "LINE_VIS_EDG.sql"
+    "LINE_VIS_EDG_Stats.sql"
+    "LINE_VIS_HEA.sql"
+    "LINE_VIS_NodesListV2.sql"
+    "LINE_VIS_GetNodesSuccessorsPredecessorsV2.sql"
+)
+
 echo "== Serveur      : $SERVER"
 echo "== Base de test : $TEST_DB"
 
@@ -45,19 +54,23 @@ BEGIN
 END
 CREATE DATABASE [$TEST_DB];"
 
-echo "== (2) deploiement du schema + du cache d'agregats + de la procedure"
-sed "s/${PROD_DB}/${TEST_DB}/g" "$SRC/LINE_VIS_EDG.sql"          > "$TMP/schema.sql"
-sed "s/${PROD_DB}/${TEST_DB}/g" "$SRC/LINE_VIS_EDG_Stats.sql"    > "$TMP/stats.sql"
-sed "s/${PROD_DB}/${TEST_DB}/g" "$SRC/LINE_VIS_NodesListV2.sql"  > "$TMP/proc.sql"
-run_file "$TMP/schema.sql"
-run_file "$TMP/stats.sql"
-run_file "$TMP/proc.sql"
+echo "== (2) deploiement schema + procedures"
+for f in "${DEPLOY[@]}"; do
+    echo "   - $f"
+    sed "s/${PROD_DB}/${TEST_DB}/g" "$SRC/$f" > "$TMP/$(basename "$f")"
+    run_file "$TMP/$(basename "$f")"
+done
 
 echo "== (3) execution des tests"
-set +e
-"$SQLCMD" -S "$SERVER" -E -C -b -I -i "$(win "$HERE/test_LINE_VIS_NodesListV2.sql")"
-rc=$?
-set -e
+rc=0
+for t in "$HERE"/test_*.sql; do
+    echo "   --- $(basename "$t") ---"
+    set +e
+    "$SQLCMD" -S "$SERVER" -E -C -b -I -i "$(win "$t")"
+    trc=$?
+    set -e
+    [ "$trc" -ne 0 ] && rc="$trc"
+done
 
 if [ "${KEEP:-0}" != "1" ]; then
     echo "== (4) suppression de la base de test"
