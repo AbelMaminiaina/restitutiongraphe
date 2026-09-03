@@ -36,13 +36,42 @@ B C
 - Lignes vides et lignes débutant par `#` : ignorées.
 - Un nœud cité seulement dans `ARETES` est ajouté automatiquement.
 
-## Fichiers
+## Partager à des utilisateurs (sans leur donner le code source)
+
+Le dossier **`dist/`** contient une version prête à distribuer :
+
+| Fichier | Rôle |
+| --- | --- |
+| `graphe.html` | **Un seul fichier** : HTML + CSS + JS **minifiés et intégrés** (pas de `.js` lisible à côté) |
+| `Ouvrir le graphe.bat` | Windows : double-clic → ouvre `graphe.html` dans le navigateur |
+| `Ouvrir le graphe.command` | macOS/Linux : idem (1er lancement : clic droit → Ouvrir) |
+| `exemple.txt`, `LISEZ-MOI.txt` | jeu de démo + notice |
+
+**Pour partager** : copiez le dossier `dist/` sur une clé USB, un lecteur réseau
+ou un `.zip` par mail. L'utilisateur double-clique le lanceur — aucun outil à
+installer. Une connexion internet reste nécessaire au chargement (librairies
+d'affichage sur CDN).
+
+> À savoir : du JavaScript exécuté dans un navigateur n'est **jamais totalement
+> masqué** (`F12` / « afficher le code source » restent possibles). La
+> minification le rend seulement illisible sans effort.
+
+### Régénérer `dist/`
+
+```
+node build.mjs
+```
+
+Nécessite Node.js + accès npm (npx télécharge `terser` au premier appel).
+
+## Fichiers source
 
 | Fichier | Rôle |
 | --- | --- |
 | `index.html` | Structure de la page + chargement des librairies CDN |
 | `style.css` | Thème sombre, mise en page |
 | `app.js` | Parsing du `.txt`, rendu cytoscape, statistiques, interactions |
+| `build.mjs` | Génère `dist/` (fichier unique minifié + lanceurs) |
 | `exemple.txt` | Jeu de données de démonstration (5 nœuds, 6 arêtes, contient un cycle) |
 
 ## Librairies utilisées
