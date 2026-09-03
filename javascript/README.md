@@ -143,6 +143,21 @@ le script (sinon « fichier verrouillé »).
 | `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
 | `exemple.xlsx` | Jeu de démonstration : 20 lignes → 14 nœuds, 20 arêtes, avec un cycle |
 
+## Comprendre le code
+
+`app.js` commence par un **guide de lecture** : les 9 sections classées de la
+plus simple à la plus technique, l'ordre conseillé, et un rappel de vocabulaire
+(graphe orienté, successeur/prédécesseur, degré, cycle…).
+
+Difficulté globale : **moyenne**. Les parties faciles (récupération des éléments
+HTML, réglages, câblage des clics) sont peu commentées exprès pour rester
+lisibles ; les parties denses sont commentées **ligne par ligne** :
+
+- `rowsToGraph` — Excel → `{ nodes, edges }` ;
+- `detectCycle` — parcours en profondeur (DFS) avec coloriage blanc/gris/noir ;
+- `countWeakComponents` — parcours en largeur (BFS) avec une file ;
+- `selectNode` — l'API « collections + classes » de cytoscape.
+
 ## Librairies utilisées
 
 - [Cytoscape.js](https://js.cytoscape.org/) `3.30.2` — rendu et interaction du graphe
