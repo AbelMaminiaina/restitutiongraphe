@@ -205,8 +205,11 @@ code {
   display: inline-block;
 }
 
-.swatch-node {
+.swatch-edg {
   background: var(--node);
+}
+.swatch-dta {
+  background: #a78bfa;
 }
 .swatch-sel {
   background: var(--accent-strong);

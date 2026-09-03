@@ -9,10 +9,12 @@
   <!-- Librairies modernes, servies EN LOCAL depuis vendor/ (aucun accès internet).
        - cytoscape : moteur de rendu de graphes (nœuds + arêtes) interactif
        - dagre + cytoscape-dagre : disposition hiérarchique, idéale pour un graphe ORIENTÉ
+       - xlsx (SheetJS) : lecture des fichiers Excel .xlsx dans le navigateur
        Aucune installation npm : il suffit d'ouvrir index.html dans un navigateur. -->
   <script src="vendor/cytoscape.min.js"></script>
   <script src="vendor/dagre.min.js"></script>
   <script src="vendor/cytoscape-dagre.min.js"></script>
+  <script src="vendor/xlsx.mini.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -21,14 +23,14 @@
         <span class="brand-dot"></span>
         <div>
           <h1>Graphe orienté non pondéré</h1>
-          <p class="brand-sub">Chargez un fichier <code>.txt</code> au format <code>NOEUDS</code> / <code>ARETES</code></p>
+          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> (colonnes <code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>)</p>
         </div>
       </div>
 
       <div class="topbar-actions">
         <label class="btn btn-primary">
-          Importer un .txt
-          <input type="file" id="file-input" accept=".txt,text/plain" hidden />
+          Importer un .xlsx
+          <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
         </label>
         <button type="button" class="btn btn-ghost" id="example-btn">Charger l'exemple</button>
       </div>
@@ -40,8 +42,8 @@
         <div class="dropzone" id="dropzone">
           <div class="dropzone-inner">
             <div class="dropzone-icon">⇪</div>
-            <p class="dropzone-title">Glissez-déposez votre fichier <code>.txt</code> ici</p>
-            <p class="dropzone-hint">ou utilisez « Importer un .txt » / « Charger l'exemple »</p>
+            <p class="dropzone-title">Glissez-déposez votre fichier Excel <code>.xlsx</code> ici</p>
+            <p class="dropzone-hint">ou utilisez « Importer un .xlsx » / « Charger l'exemple »</p>
           </div>
         </div>
 
@@ -51,7 +53,8 @@
 
         <!-- Petite légende en surimpression -->
         <div class="legend" id="legend" hidden>
-          <span><i class="swatch swatch-node"></i> nœud</span>
+          <span><i class="swatch swatch-edg"></i> nœud edg</span>
+          <span><i class="swatch swatch-dta"></i> nœud données</span>
           <span><i class="swatch swatch-sel"></i> sélection</span>
           <span><i class="swatch swatch-succ"></i> successeurs</span>
           <span><i class="swatch swatch-pred"></i> prédécesseurs</span>

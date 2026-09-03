@@ -1,41 +1,58 @@
 # javascript/ — Visualiseur de graphe orienté non pondéré
 
 Petite application **100 % navigateur, 100 % hors ligne** (HTML + JavaScript,
-aucun serveur, aucune installation, aucun accès internet) qui affiche le graphe
-orienté non pondéré décrit dans un fichier texte au format `NOEUDS` / `ARETES`
-(comme `exemple.txt`).
+aucun serveur, aucune installation, aucun accès internet) qui construit et
+affiche un graphe orienté non pondéré à partir d'un **fichier Excel `.xlsx`**
+(comme `exemple.xlsx`).
 
 ## Lancer
 
 Double-cliquez sur **`index.html`** (ou ouvrez-le dans un navigateur).
 
-> Les librairies (cytoscape, dagre) sont stockées **en local** dans `vendor/` —
-> rien n'est téléchargé au chargement.
+> Les librairies (cytoscape, dagre, xlsx) sont stockées **en local** dans
+> `vendor/` — rien n'est téléchargé au chargement.
 
 ## Utilisation
 
 | Action | Comment |
 | --- | --- |
-| Charger un fichier | Bouton **« Importer un .txt »** ou **glisser-déposer** le fichier sur la zone centrale |
-| Voir la démo | Bouton **« Charger l'exemple »** (contenu de `exemple.txt` intégré au code) |
+| Charger un fichier | Bouton **« Importer un .xlsx »** ou **glisser-déposer** le fichier sur la zone centrale |
+| Voir la démo | Bouton **« Charger l'exemple »** (données de `exemple.xlsx` intégrées au code) |
 | Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (vert) et *prédécesseurs* (jaune) sont mis en évidence |
 | Changer la disposition | Menu **« Mise en page »** (hiérarchique, cercle, forces…) |
 | Exporter | Bouton **« Exporter PNG »** |
 
-## Format de fichier attendu
+Les nœuds `edg_*` sont en **bleu**, les nœuds « données » `dta_*` en **violet**.
 
-```
-NOEUDS
-A
-B
-C
-ARETES
-A B      <- arête orientée A -> B
-B C
-```
+## Format du fichier Excel attendu
 
-- Lignes vides et lignes débutant par `#` : ignorées.
-- Un nœud cité seulement dans `ARETES` est ajouté automatiquement.
+Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
+
+| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A11 | A12 | A13 | A14 | `I` | E11 | E12 | E13 | E14 |
+| A21 | A22 | A23 | A24 | `O` | E21 | E22 | E23 | E24 |
+
+Chaque ligne définit **deux nœuds** et **une arête** entre eux :
+
+- nœud « données » = concaténation `dta_4.dta_3.dta_2.dta_1` (ex. `A14.A13.A12.A11`) ;
+- nœud « edg » = concaténation `edg_4.edg_3.edg_2.edg_1` (ex. `E14.E13.E12.E11`) ;
+- la colonne **`edg_dir`** donne le **sens** de l'arête :
+  - **`I`** (Input) → le nœud « données » est **prédécesseur** du nœud « edg »
+    ⇒ arête `données → edg` ;
+  - **`O`** (Output) → le nœud « données » est **successeur** du nœud « edg »
+    ⇒ arête `edg → données`.
+
+Donc : les **nœuds** du graphe sont toutes les concaténations `dta_*` et `edg_*`,
+les **arêtes** sont les couples (données, edg) orientés selon `edg_dir`.
+
+Tolérances de lecture :
+
+- en-têtes insensibles à la casse ; `edg4` accepté comme `edg_4` ; la colonne de
+  sens est repérée par n'importe quel en-tête contenant `dir` (`edr_dir`,
+  `direction`…) ;
+- morceaux `dta_*` / `edg_*` vides ignorés dans la concaténation ;
+- ligne dont le nœud « données » ou « edg » est entièrement vide : ignorée.
 
 ## Partager à des utilisateurs (sans leur donner le code source)
 
@@ -43,10 +60,10 @@ Le dossier **`dist/`** contient une version prête à distribuer :
 
 | Fichier | Rôle |
 | --- | --- |
-| `graphe.html` | **Un seul fichier autonome** (~660 Ko) : HTML + CSS + JS de l'appli **minifiés** + les librairies, tout intégré. Aucun `.js` lisible à côté, **aucun accès internet** |
+| `graphe.html` | **Un seul fichier autonome** (~900 Ko) : HTML + CSS + JS de l'appli **minifiés** + les librairies, tout intégré. Aucun `.js` lisible à côté, **aucun accès internet** |
 | `Ouvrir le graphe.bat` | Windows : double-clic → ouvre `graphe.html` dans le navigateur |
 | `Ouvrir le graphe.command` | macOS/Linux : idem (1er lancement : clic droit → Ouvrir) |
-| `exemple.txt`, `LISEZ-MOI.txt` | jeu de démo + notice |
+| `exemple.xlsx`, `LISEZ-MOI.txt` | jeu de démo + notice |
 
 **Pour partager** : copiez le dossier `dist/` sur une clé USB, un lecteur réseau
 ou un `.zip` par mail. L'utilisateur double-clique le lanceur — aucun outil à
@@ -76,7 +93,7 @@ téléchargées : le build réutilise les copies de `vendor/`.
    Sortie attendue :
    ```
    Minification du JS avec terser…
-   OK -> …/javascript/dist  (graphe.html : 663 Ko, autonome)
+   OK -> …/javascript/dist  (graphe.html : 909 Ko, autonome)
    ```
    Si un fichier de `vendor/` a été renommé/déplacé, ou si une référence externe
    reste dans le HTML, le script s'arrête avec un message d'erreur explicite.
@@ -106,12 +123,13 @@ téléchargées : le build réutilise les copies de `vendor/`.
 | --- | --- |
 | `index.html` | Structure de la page + chargement des librairies locales |
 | `style.css` | Thème sombre, mise en page |
-| `app.js` | Parsing du `.txt`, rendu cytoscape, statistiques, interactions |
+| `app.js` | Lecture du `.xlsx`, construction du graphe, rendu cytoscape, statistiques, interactions |
 | `build.mjs` | Génère `dist/` (fichier unique autonome minifié + lanceurs) |
-| `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre) copiées depuis jsDelivr |
-| `exemple.txt` | Jeu de données de démonstration (5 nœuds, 6 arêtes, contient un cycle) |
+| `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
+| `exemple.xlsx` | Jeu de données de démonstration (2 lignes → 4 nœuds, 2 arêtes) |
 
 ## Librairies utilisées
 
 - [Cytoscape.js](https://js.cytoscape.org/) `3.30.2` — rendu et interaction du graphe
 - [dagre](https://github.com/dagrejs/dagre) `0.8.5` + [cytoscape-dagre](https://github.com/cytoscape/cytoscape.js-dagre) `2.5.0` — disposition hiérarchique orientée
+- [SheetJS / xlsx](https://sheetjs.com/) `0.18.5` (build `xlsx.mini.min.js`) — lecture des fichiers `.xlsx`

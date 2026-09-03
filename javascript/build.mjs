@@ -6,7 +6,7 @@
      2. minifie le CSS (regex) et le JS de l'appli (terser via npx)
      3. produit UN SEUL fichier dist/graphe.html : CSS, librairies et JS
         tous intégrés -> AUCUN accès internet, aucun fichier .js à côté
-     4. copie exemple.txt et crée les lanceurs double-clic (.bat / .command)
+     4. copie exemple.xlsx et crée les lanceurs double-clic (.bat / .command)
 
    Lancer :  node build.mjs
    Pré-requis : Node.js + accès npm (npx télécharge terser au 1er appel).
@@ -25,8 +25,10 @@ const html = readFileSync(join(HERE, "index.html"), "utf8");
 const css = readFileSync(join(HERE, "style.css"), "utf8");
 const js = readFileSync(join(HERE, "app.js"), "utf8");
 
-// Librairies locales, dans l'ordre de chargement (cytoscape avant son extension).
-const VENDOR = ["cytoscape.min.js", "dagre.min.js", "cytoscape-dagre.min.js"];
+// Librairies locales : on lit exactement les <script src="vendor/…"> d'index.html,
+// dans leur ordre d'apparition (cytoscape doit précéder son extension dagre).
+const VENDOR = [...html.matchAll(/<script src="vendor\/([^"]+)"><\/script>/g)].map((m) => m[1]);
+if (VENDOR.length === 0) throw new Error("Aucun <script src=\"vendor/…\"> trouvé dans index.html");
 const vendorJs = VENDOR.map((name) =>
   readFileSync(join(HERE, "vendor", name), "utf8")
     // on enlève les commentaires "sourceMappingURL" -> pas de .map à chercher
@@ -67,11 +69,10 @@ let out = html
   // feuille de style externe -> <style> intégré et minifié
   .replace(/\s*<link rel="stylesheet" href="style\.css"\s*\/>\n?/, "\n")
   .replace("</head>", () => `  <style>${cssMin}</style>\n</head>`)
-  // les 3 <script src="vendor/..."> -> un seul <script> avec les libs intégrées
-  .replace(
-    /\s*<script src="vendor\/cytoscape\.min\.js"><\/script>\s*<script src="vendor\/dagre\.min\.js"><\/script>\s*<script src="vendor\/cytoscape-dagre\.min\.js"><\/script>/,
-    () => `\n  <script>${vendorJs}</script>`
-  )
+  // 1er <script src="vendor/..."> -> un seul <script> avec toutes les libs intégrées
+  .replace(/[ \t]*<script src="vendor\/[^"]+"><\/script>\n?/, () => `  <script>${vendorJs}</script>\n`)
+  // les autres <script src="vendor/..."> -> supprimés (déjà intégrés ci-dessus)
+  .replace(/[ \t]*<script src="vendor\/[^"]+"><\/script>\n?/g, "")
   // <script src="app.js"> -> JS de l'appli minifié en ligne
   .replace(/<script src="app\.js"><\/script>/, () => `<script>${jsMin}</script>`);
 
@@ -82,7 +83,7 @@ if (/\ssrc="(vendor\/|app\.js)|href="style\.css"/.test(out)) {
 writeFileSync(join(DIST, "graphe.html"), out);
 
 /* --- 4. Fichiers d'accompagnement ------------------------------- */
-copyFileSync(join(HERE, "exemple.txt"), join(DIST, "exemple.txt"));
+copyFileSync(join(HERE, "exemple.xlsx"), join(DIST, "exemple.xlsx"));
 
 // Lanceur Windows : ouvre graphe.html dans le navigateur par défaut.
 writeFileSync(
@@ -109,7 +110,7 @@ writeFileSync(
     "",
     "Fonctionne 100 % hors ligne (aucune connexion internet requise).",
     "",
-    "Chargez votre fichier .txt (bouton ou glisser-déposer),",
+    "Chargez votre fichier Excel .xlsx (bouton ou glisser-déposer),",
     "ou cliquez « Charger l'exemple ».",
   ].join("\n") + "\n"
 );

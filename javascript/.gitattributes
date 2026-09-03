@@ -1,2 +1,5 @@
 # Librairies tierces : garder les fichiers identiques à l'original (pas de conversion de fin de ligne).
 vendor/** -text
+
+# Fichiers binaires
+*.xlsx binary
