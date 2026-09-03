@@ -30,13 +30,13 @@ Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
 
 | `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A11 | A12 | A13 | A14 | `I` | E11 | E12 | E13 | E14 |
-| A21 | A22 | A23 | A24 | `O` | E21 | E22 | E23 | E24 |
+| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 |
+| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 |
 
 Chaque ligne définit **deux nœuds** et **une arête** entre eux :
 
-- nœud « données » = concaténation `dta_4.dta_3.dta_2.dta_1` (ex. `A14.A13.A12.A11`) ;
-- nœud « edg » = concaténation `edg_4.edg_3.edg_2.edg_1` (ex. `E14.E13.E12.E11`) ;
+- nœud « données » = concaténation `dta_4.dta_3.dta_2.dta_1` (ex. `DA4.DA3.DA2.DA1`) ;
+- nœud « edg » = concaténation `edg_4.edg_3.edg_2.edg_1` (ex. `EA4.EA3.EA2.EA1`) ;
 - la colonne **`edg_dir`** donne le **sens** de l'arête :
   - **`I`** (Input) → le nœud « données » est **prédécesseur** du nœud « edg »
     ⇒ arête `données → edg` ;
@@ -106,6 +106,20 @@ téléchargées : le build réutilise les copies de `vendor/`.
 > pas du code source). Il est donc normal qu'il n'apparaisse pas sur GitHub :
 > chacun le régénère avec `node build.mjs`.
 
+### Régénérer le jeu d'exemple (`exemple.xlsx`)
+
+Les données de démonstration (≈ 20 lignes) sont décrites dans
+**`generer-exemple.mjs`** (tableau `RECORDS`). Après modification :
+
+```
+node generer-exemple.mjs
+```
+
+Le script réécrit `exemple.xlsx` **et** affiche le tableau `EXEMPLE_ROWS` à
+recopier dans `app.js` (le bouton « Charger l'exemple » lit ces lignes
+intégrées, pas le fichier). Fermez `exemple.xlsx` dans Excel avant de lancer
+le script (sinon « fichier verrouillé »).
+
 ### Mettre à jour une librairie
 
 1. Télécharger la nouvelle version depuis jsDelivr, **sous le même nom de
@@ -125,8 +139,9 @@ téléchargées : le build réutilise les copies de `vendor/`.
 | `style.css` | Thème sombre, mise en page |
 | `app.js` | Lecture du `.xlsx`, construction du graphe, rendu cytoscape, statistiques, interactions |
 | `build.mjs` | Génère `dist/` (fichier unique autonome minifié + lanceurs) |
+| `generer-exemple.mjs` | (Re)génère `exemple.xlsx` + le tableau `EXEMPLE_ROWS` de `app.js` |
 | `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
-| `exemple.xlsx` | Jeu de données de démonstration (2 lignes → 4 nœuds, 2 arêtes) |
+| `exemple.xlsx` | Jeu de démonstration : 20 lignes → 14 nœuds, 20 arêtes, avec un cycle |
 
 ## Librairies utilisées
 
