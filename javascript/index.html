@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graphe orienté non pondéré — visualiseur</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Librairies modernes chargées depuis un CDN.
+       - cytoscape : moteur de rendu de graphes (nœuds + arêtes) interactif
+       - dagre + cytoscape-dagre : disposition hiérarchique, idéale pour un graphe ORIENTÉ
+       Aucune installation npm : il suffit d'ouvrir index.html dans un navigateur. -->
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <div>
+          <h1>Graphe orienté non pondéré</h1>
+          <p class="brand-sub">Chargez un fichier <code>.txt</code> au format <code>NOEUDS</code> / <code>ARETES</code></p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="btn btn-primary">
+          Importer un .txt
+          <input type="file" id="file-input" accept=".txt,text/plain" hidden />
+        </label>
+        <button type="button" class="btn btn-ghost" id="example-btn">Charger l'exemple</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- Zone centrale : le graphe + une zone de dépôt (glisser-déposer) -->
+      <main class="stage" id="stage">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-inner">
+            <div class="dropzone-icon">⇪</div>
+            <p class="dropzone-title">Glissez-déposez votre fichier <code>.txt</code> ici</p>
+            <p class="dropzone-hint">ou utilisez « Importer un .txt » / « Charger l'exemple »</p>
+          </div>
+        </div>
+
+        <div id="cy"></div>
+
+        <p class="stage-error" id="stage-error" hidden></p>
+
+        <!-- Petite légende en surimpression -->
+        <div class="legend" id="legend" hidden>
+          <span><i class="swatch swatch-node"></i> nœud</span>
+          <span><i class="swatch swatch-sel"></i> sélection</span>
+          <span><i class="swatch swatch-succ"></i> successeurs</span>
+          <span><i class="swatch swatch-pred"></i> prédécesseurs</span>
+        </div>
+      </main>
+
+      <!-- Panneau latéral : infos, mise en page, statistiques -->
+      <aside class="panel">
+        <section class="card">
+          <h2>Fichier</h2>
+          <p class="muted" id="file-name">Aucun fichier chargé.</p>
+        </section>
+
+        <section class="card">
+          <h2>Mise en page</h2>
+          <label class="field">
+            Algorithme de disposition
+            <select id="layout-select">
+              <option value="dagre" selected>Hiérarchique (dagre)</option>
+              <option value="breadthfirst">Parcours en largeur</option>
+              <option value="circle">Cercle</option>
+              <option value="concentric">Concentrique (par degré)</option>
+              <option value="grid">Grille</option>
+              <option value="cose">Forces (cose)</option>
+            </select>
+          </label>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost" id="fit-btn">Recentrer</button>
+            <button type="button" class="btn btn-ghost" id="png-btn">Exporter PNG</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Nœud sélectionné</h2>
+          <p class="muted" id="selection-hint">Cliquez un nœud pour voir ses voisins.</p>
+          <div id="selection-detail" hidden>
+            <p class="sel-title" id="sel-id"></p>
+            <div class="sel-block">
+              <span class="sel-label">Successeurs <b id="succ-count">0</b></span>
+              <div class="chips" id="succ-chips"></div>
+            </div>
+            <div class="sel-block">
+              <span class="sel-label">Prédécesseurs <b id="pred-count">0</b></span>
+              <div class="chips" id="pred-chips"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Statistiques</h2>
+          <div class="stats" id="stats">
+            <p class="muted">—</p>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
