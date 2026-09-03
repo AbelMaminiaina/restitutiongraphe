@@ -143,6 +143,49 @@ le script (sinon « fichier verrouillé »).
 | `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
 | `exemple.xlsx` | Jeu de démonstration : 20 lignes → 14 nœuds, 20 arêtes, avec un cycle |
 
+## Déboguer
+
+Tout se passe dans les **outils de développement du navigateur** (`F12`).
+Débogue **`index.html`** (lisible), jamais `dist/graphe.html` (minifié).
+
+### Points d'arrêt intégrés (`DEBUG`)
+
+`app.js` (section 0) contient une fonction `brk("…")` placée aux étapes clés :
+entrée/sortie de `rowsToGraph`, repérage des colonnes, chaque ligne traitée,
+`renderGraph`, `selectNode`, `loadFile`. Elle ne fait rien tant que `DEBUG`
+est faux. Pour l'activer :
+
+- **soit** ouvrir la page avec `?debug=1` à la fin de l'URL
+  (`.../index.html?debug=1`) ;
+- **soit** éditer `app.js` : `const DEBUG = true || ( … )`.
+
+Ensuite, `F12` ouvert, recharge : l'exécution **s'arrête à chaque `brk()`**.
+Touches : `F10` (ligne suivante), `F11` (entrer dans la fonction), `F8`
+(continuer). Les variables à regarder sont indiquées dans le message console.
+
+> Ces points d'arrêt sont **retirés automatiquement** du build : `dist/graphe.html`
+> ne contient aucun `debugger`.
+
+### Sans les points d'arrêt
+
+| Outil | Usage |
+| --- | --- |
+| Onglet **Console** | erreurs en rouge (clique la ligne `app.js:123`) ; messages `console.warn` du code |
+| **Console** (saisie directe) | tester une fonction : `rowsToGraph(EXEMPLE_ROWS)`, `computeStats(currentData)`, `cy.nodes().length` |
+| Onglet **Sources** | poser ses propres points d'arrêt en cliquant un numéro de ligne |
+| Onglet **Network** | vérifier que `vendor/*.js` se chargent en `200` (un `404` = chemin cassé) |
+| Onglet **Elements** | inspecter le HTML réel ; vérifier qu'un `id` existe |
+| `console.table(rows)` | afficher un tableau lisible |
+
+Erreurs fréquentes : `XLSX is not defined` → un `<script vendor/>` non chargé ;
+`Cannot read properties of null` → un `id` HTML absent / mal écrit ;
+« Colonnes attendues introuvables » → mauvaises colonnes dans le `.xlsx`.
+
+### VS Code
+
+Extension **Live Server** → bouton **« Go Live »** : sert la page sur
+`http://localhost:5500` avec rechargement automatique (mieux que le double-clic).
+
 ## Comprendre le code
 
 `app.js` commence par un **guide de lecture** : les 9 sections classées de la

@@ -39,6 +39,30 @@
    ================================================================== */
 
 /* ------------------------------------------------------------------
+   0. Mode débogage
+   ------------------------------------------------------------------
+   Mettre DEBUG = true pour activer les points d'arrêt (`debugger;`) placés
+   aux étapes clés du programme. Quand les outils de développement du
+   navigateur (touche F12) sont ouverts, l'exécution s'arrête à chaque
+   `debugger;` : on peut alors inspecter les variables, avancer pas à pas
+   (F10), entrer dans une fonction (F11), continuer (F8).
+
+   Laisser DEBUG = false en usage normal.
+   (Astuce : on peut aussi forcer le mode via l'URL ...index.html?debug=1)
+------------------------------------------------------------------ */
+const DEBUG =
+  false ||
+  (typeof location !== "undefined" && /[?&]debug=1\b/.test(location.search));
+
+// brk("étiquette") : point d'arrêt qui ne se déclenche QUE si DEBUG est vrai.
+// L'étiquette est juste affichée dans la console pour se repérer.
+function brk(label) {
+  if (!DEBUG) return;
+  console.log("[debug] " + label); // repère dans la console
+  debugger; // eslint-disable-line no-debugger
+}
+
+/* ------------------------------------------------------------------
    1. Exemple embarqué (= contenu de exemple.xlsx sous forme de lignes)
    ------------------------------------------------------------------
    Le bouton « Charger l'exemple » réutilise ces lignes : pas besoin de
@@ -91,6 +115,9 @@ const EXEMPLE_ROWS = [
    en-tête contenant « dir » (edg_dir, edr_dir, direction…).
 ------------------------------------------------------------------ */
 function rowsToGraph(rows) {
+  // Point d'arrêt : inspecter `rows` (le tableau brut lu depuis Excel).
+  brk("rowsToGraph — entrée. Regarde: rows");
+
   if (!rows || rows.length < 2) {
     throw new Error("Le fichier doit contenir une ligne d'en-tête + au moins une ligne de données.");
   }
@@ -129,6 +156,9 @@ function rowsToGraph(rows) {
   if (dirCol === -1) {
     throw new Error("Colonne de sens introuvable : un en-tête doit contenir « dir » (ex. edg_dir).");
   }
+
+  // Point d'arrêt : vérifier le repérage des colonnes (dtaCol, edgCol, dirCol).
+  brk("rowsToGraph — colonnes repérées. Regarde: header, dtaCol, edgCol, dirCol");
 
   // --- 2.2  joinParts : reconstituer le nom d'un nœud ---------------------
   // À partir d'une ligne et d'un plan de colonnes (dtaCol ou edgCol), recolle
@@ -183,6 +213,9 @@ function rowsToGraph(rows) {
       throw new Error(`Ligne ${r + 1} : sens « ${row[dirCol]} » non reconnu (attendu I ou O).`);
     }
 
+    // Point d'arrêt (une fois par ligne de données) : voir ce qu'on a extrait.
+    brk(`rowsToGraph — ligne ${r + 1}. Regarde: dtaNode, edgNode, dir, source, target`);
+
     // On enregistre les types des deux nœuds.
     noteKind(dtaNode, "dta");
     noteKind(edgNode, "edg");
@@ -207,6 +240,9 @@ function rowsToGraph(rows) {
     // "both" si le nœud est à la fois donnée et edg, sinon l'un des deux.
     kind: kinds.has("dta") && kinds.has("edg") ? "both" : kinds.has("edg") ? "edg" : "dta",
   }));
+
+  // Point d'arrêt : le graphe final avant affichage.
+  brk("rowsToGraph — sortie. Regarde: nodes, edges");
 
   return { nodes, edges };
 }
@@ -277,6 +313,9 @@ const LAYOUT_CONFIGS = {
    5. Rendu du graphe avec cytoscape
 ------------------------------------------------------------------ */
 function renderGraph(data) {
+  // Point d'arrêt : `data` = { nodes, edges } sur le point d'être dessiné.
+  brk("renderGraph — entrée. Regarde: data, layoutSelect.value");
+
   // On repart de zéro à chaque nouveau fichier.
   if (cy) {
     cy.destroy();
@@ -400,6 +439,9 @@ function renderGraph(data) {
 ------------------------------------------------------------------ */
 function selectNode(id) {
   if (!cy) return; // aucun graphe affiché
+
+  // Point d'arrêt : `id` = nœud cliqué ; ci-dessous outgoers/incomers.
+  brk("selectNode — id = " + id);
 
   // cytoscape manipule des "collections" d'éléments et leur applique des
   // "classes" (comme en CSS). La feuille de style de renderGraph décide
@@ -640,6 +682,8 @@ function loadFile(file) {
   const reader = new FileReader();
   reader.onload = () => {
     // reader.result = le contenu du fichier, ici en binaire (ArrayBuffer).
+    // Point d'arrêt : on tient les octets bruts du .xlsx.
+    brk("loadFile — fichier lu : " + file.name + " (" + reader.result.byteLength + " octets)");
     try {
       loadGraph(workbookBufferToGraph(reader.result), file.name);
     } catch (err) {
