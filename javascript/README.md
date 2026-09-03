@@ -56,14 +56,49 @@ installer, aucune connexion requise.
 > masqué** (`F12` / « afficher le code source » restent possibles). La
 > minification le rend seulement illisible sans effort.
 
-### Régénérer `dist/`
+### Générer une version distribuable (`dist/`)
 
-```
-node build.mjs
-```
+**Pré-requis** : [Node.js](https://nodejs.org) ≥ 18 installé. Au tout premier
+build, `npx` télécharge `terser` (le minifieur) — une connexion est nécessaire
+**cette fois-là uniquement**. Les librairies d'affichage, elles, ne sont jamais
+téléchargées : le build réutilise les copies de `vendor/`.
 
-Nécessite Node.js + accès npm (npx télécharge `terser` au premier appel).
-Le build ne télécharge **pas** les librairies : il réutilise celles de `vendor/`.
+1. Ouvrir un terminal dans le dossier `javascript/` :
+   ```
+   cd chemin/vers/restitutiondonnees/javascript
+   ```
+2. (Optionnel) mettre à jour l'exemple ou le code source (`app.js`, `style.css`,
+   `index.html`).
+3. Lancer le build :
+   ```
+   node build.mjs
+   ```
+   Sortie attendue :
+   ```
+   Minification du JS avec terser…
+   OK -> …/javascript/dist  (graphe.html : 663 Ko, autonome)
+   ```
+   Si un fichier de `vendor/` a été renommé/déplacé, ou si une référence externe
+   reste dans le HTML, le script s'arrête avec un message d'erreur explicite.
+4. Vérifier : ouvrir `dist/graphe.html` dans un navigateur, cliquer
+   **« Charger l'exemple »**, contrôler que le graphe s'affiche.
+5. Distribuer : copier **tout le dossier `dist/`** (clé USB, lecteur réseau,
+   `.zip`). Ne pas séparer `graphe.html` des lanceurs si on veut le double-clic.
+
+> `dist/` est ignoré par le `.gitignore` du dépôt (c'est un résultat de build,
+> pas du code source). Il est donc normal qu'il n'apparaisse pas sur GitHub :
+> chacun le régénère avec `node build.mjs`.
+
+### Mettre à jour une librairie
+
+1. Télécharger la nouvelle version depuis jsDelivr, **sous le même nom de
+   fichier**, dans `vendor/` :
+   ```
+   curl -L -o vendor/cytoscape.min.js https://cdn.jsdelivr.net/npm/cytoscape@<version>/dist/cytoscape.min.js
+   ```
+2. Ajuster le numéro de version dans la section « Librairies utilisées »
+   ci-dessous.
+3. `node build.mjs`, puis re-vérifier `dist/graphe.html` dans un navigateur.
 
 ## Fichiers source
 
@@ -80,6 +115,3 @@ Le build ne télécharge **pas** les librairies : il réutilise celles de `vendo
 
 - [Cytoscape.js](https://js.cytoscape.org/) `3.30.2` — rendu et interaction du graphe
 - [dagre](https://github.com/dagrejs/dagre) `0.8.5` + [cytoscape-dagre](https://github.com/cytoscape/cytoscape.js-dagre) `2.5.0` — disposition hiérarchique orientée
-
-Pour mettre à jour une librairie : remplacez le fichier dans `vendor/` (même
-nom), ajustez les versions ci-dessus, puis `node build.mjs`.
