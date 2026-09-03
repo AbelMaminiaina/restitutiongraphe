@@ -6,13 +6,13 @@
   <title>Graphe orienté non pondéré — visualiseur</title>
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Librairies modernes chargées depuis un CDN.
+  <!-- Librairies modernes, servies EN LOCAL depuis vendor/ (aucun accès internet).
        - cytoscape : moteur de rendu de graphes (nœuds + arêtes) interactif
        - dagre + cytoscape-dagre : disposition hiérarchique, idéale pour un graphe ORIENTÉ
        Aucune installation npm : il suffit d'ouvrir index.html dans un navigateur. -->
-  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/dagre.min.js"></script>
+  <script src="vendor/cytoscape-dagre.min.js"></script>
 </head>
 <body>
   <div class="app">

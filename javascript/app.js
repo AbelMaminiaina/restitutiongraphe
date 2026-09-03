@@ -181,8 +181,6 @@ function renderGraph(data) {
   cy = cytoscape({
     container: document.getElementById("cy"),
     elements,
-    // wheelSensitivity < 1 : zoom molette moins brutal
-    wheelSensitivity: 0.25,
     style: [
       {
         selector: "node",
