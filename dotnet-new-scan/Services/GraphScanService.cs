@@ -19,157 +19,180 @@
 //   - LineVisEdgRepository.StreamAllEdges()      : lecture des arêtes ;
 //   - NodeComponentRepository.ReplaceAll(...)     : écriture de NODE_COMPONENT ;
 //   - NodeComponentRepository.GetComponentIds(...): lecture des composantes.
+//
+// C# 8.0 : ScanStatus est une classe (pas un `record`).
 
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 
 using PathFinder.ScanMvc.Models;
 
-namespace PathFinder.ScanMvc.Services;
-
-// Statut du dernier scan exécuté (gardé en mémoire par le singleton).
-public record ScanStatus(
-    DateTime CompletedAtUtc,
-    long NodeCount,
-    long EdgeCount,
-    int ComponentCount,
-    long DurationMs,
-    int LargestComponentSize);
-
-// Verdict de la comparaison de composantes pour un couple (source, cible).
-public enum ComponentVerdict
+namespace PathFinder.ScanMvc.Services
 {
-    DifferentComponents, // aucun chemin, certain
-    SameComponent,       // un chemin est possible -> lancer le BFS
-    ScanUnavailable,     // scan jamais exécuté, ou un des nœuds absent de NODE_COMPONENT
-}
-
-public class GraphScanService
-{
-    private readonly LineVisEdgRepository _edges;
-    private readonly NodeComponentRepository _components;
-
-    // volatile : le statut est écrit par l'action Run (un thread) et lu par
-    // les recherches (d'autres threads).
-    private volatile ScanStatus? _last;
-    public ScanStatus? Last => _last;
-
-    public GraphScanService(LineVisEdgRepository edges, NodeComponentRepository components)
+    // Statut du dernier scan exécuté (gardé en mémoire par le singleton).
+    public sealed class ScanStatus
     {
-        _edges = edges;
-        _components = components;
+        public DateTime CompletedAtUtc { get; }
+        public long NodeCount { get; }
+        public long EdgeCount { get; }
+        public int ComponentCount { get; }
+        public long DurationMs { get; }
+        public int LargestComponentSize { get; }
+
+        public ScanStatus(DateTime completedAtUtc, long nodeCount, long edgeCount,
+            int componentCount, long durationMs, int largestComponentSize)
+        {
+            CompletedAtUtc = completedAtUtc;
+            NodeCount = nodeCount;
+            EdgeCount = edgeCount;
+            ComponentCount = componentCount;
+            DurationMs = durationMs;
+            LargestComponentSize = largestComponentSize;
+        }
     }
 
-    // --------------------------------------------------------------------
-    // Exécution du scan. Étapes 1-2 : algorithme pur (Union-Find) sur les
-    // arêtes fournies par le repository. Étape 3 : persistance déléguée au
-    // repository.
-    // --------------------------------------------------------------------
-    public ScanStatus Run()
+    // Verdict de la comparaison de composantes pour un couple (source, cible).
+    public enum ComponentVerdict
     {
-        var sw = Stopwatch.StartNew();
+        DifferentComponents, // aucun chemin, certain
+        SameComponent,       // un chemin est possible -> lancer le BFS
+        ScanUnavailable,     // scan jamais exécuté, ou un des nœuds absent de NODE_COMPONENT
+    }
 
-        // 1. Balayer toutes les arêtes (repository) et fusionner les îles.
-        //    Le sens ne compte pas : deux nœuds reliés par une arête, quel que
-        //    soit son sens, sont dans la même composante faible.
-        var uf = new UnionFind();
-        long edgeCount = 0;
-        foreach (var (from, to) in _edges.StreamAllEdges())
+    public class GraphScanService
+    {
+        private readonly LineVisEdgRepository _edges;
+        private readonly NodeComponentRepository _components;
+
+        // volatile : le statut est écrit par l'action Run (un thread) et lu par
+        // les recherches (d'autres threads).
+        private volatile ScanStatus? _last;
+        public ScanStatus? Last => _last;
+
+        public GraphScanService(LineVisEdgRepository edges, NodeComponentRepository components)
         {
-            uf.Union(from, to);
-            edgeCount++;
+            _edges = edges;
+            _components = components;
         }
 
-        // 2. Attribuer un identifiant de composante (0, 1, 2, …) par racine.
-        var componentOfRoot = new Dictionary<string, int>();
-        var componentSize = new Dictionary<int, int>();
-        var rows = new List<(string NodeId, int ComponentId)>(uf.Nodes.Count);
-
-        foreach (var node in uf.Nodes)
+        // ----------------------------------------------------------------
+        // Exécution du scan. Étapes 1-2 : algorithme pur (Union-Find) sur les
+        // arêtes fournies par le repository. Étape 3 : persistance déléguée au
+        // repository.
+        // ----------------------------------------------------------------
+        public ScanStatus Run()
         {
-            var root = uf.Find(node);
-            if (!componentOfRoot.TryGetValue(root, out var id))
+            var sw = Stopwatch.StartNew();
+
+            // 1. Balayer toutes les arêtes (repository) et fusionner les îles.
+            //    Le sens ne compte pas : deux nœuds reliés par une arête, quel que
+            //    soit son sens, sont dans la même composante faible.
+            var uf = new UnionFind();
+            long edgeCount = 0;
+            foreach (var (from, to) in _edges.StreamAllEdges())
             {
-                id = componentOfRoot.Count;
-                componentOfRoot[root] = id;
+                uf.Union(from, to);
+                edgeCount++;
             }
 
-            componentSize[id] = componentSize.GetValueOrDefault(id) + 1;
-            rows.Add((node, id));
-        }
+            // 2. Attribuer un identifiant de composante (0, 1, 2, …) par racine.
+            var componentOfRoot = new Dictionary<string, int>();
+            var componentSize = new Dictionary<int, int>();
+            var rows = new List<(string NodeId, int ComponentId)>(uf.Nodes.Count);
 
-        // 3. Persister (repository).
-        _components.ReplaceAll(rows);
-
-        sw.Stop();
-
-        var status = new ScanStatus(
-            CompletedAtUtc: DateTime.UtcNow,
-            NodeCount: uf.Nodes.Count,
-            EdgeCount: edgeCount,
-            ComponentCount: componentOfRoot.Count,
-            DurationMs: sw.ElapsedMilliseconds,
-            LargestComponentSize: componentSize.Count == 0 ? 0 : componentSize.Values.Max());
-
-        _last = status;
-        return status;
-    }
-
-    // --------------------------------------------------------------------
-    // Comparaison des composantes de deux nœuds, utilisée avant le BFS.
-    // --------------------------------------------------------------------
-    public ComponentVerdict Compare(string source, string target)
-    {
-        var (cs, ct) = _components.GetComponentIds(source, target);
-
-        if (cs is null || ct is null)
-            return ComponentVerdict.ScanUnavailable;
-
-        return cs.Value != ct.Value
-            ? ComponentVerdict.DifferentComponents
-            : ComponentVerdict.SameComponent;
-    }
-
-    // --------------------------------------------------------------------
-    // Union-Find (« disjoint set ») sur des identifiants de nœuds (chaînes).
-    // Compression de chemin + union par rang : quasi O(1) amorti par opération.
-    // Structure purement en mémoire, aucun accès base.
-    // --------------------------------------------------------------------
-    private sealed class UnionFind
-    {
-        private readonly Dictionary<string, string> _parent = new();
-        private readonly Dictionary<string, int> _rank = new();
-
-        public IReadOnlyCollection<string> Nodes => _parent.Keys;
-
-        private void Ensure(string x)
-        {
-            if (_parent.ContainsKey(x)) return;
-            _parent[x] = x;
-            _rank[x] = 0;
-        }
-
-        public string Find(string x)
-        {
-            Ensure(x);
-            while (_parent[x] != x)
+            foreach (var node in uf.Nodes)
             {
-                _parent[x] = _parent[_parent[x]]; // compression de chemin (halving)
-                x = _parent[x];
+                var root = uf.Find(node);
+                if (!componentOfRoot.TryGetValue(root, out var id))
+                {
+                    id = componentOfRoot.Count;
+                    componentOfRoot[root] = id;
+                }
+
+                componentSize[id] = componentSize.GetValueOrDefault(id) + 1;
+                rows.Add((node, id));
             }
-            return x;
+
+            // 3. Persister (repository).
+            _components.ReplaceAll(rows);
+
+            sw.Stop();
+
+            var status = new ScanStatus(
+                DateTime.UtcNow,
+                uf.Nodes.Count,
+                edgeCount,
+                componentOfRoot.Count,
+                sw.ElapsedMilliseconds,
+                componentSize.Count == 0 ? 0 : componentSize.Values.Max());
+
+            _last = status;
+            return status;
         }
 
-        public void Union(string a, string b)
+        // ----------------------------------------------------------------
+        // Comparaison des composantes de deux nœuds, utilisée avant le BFS.
+        // ----------------------------------------------------------------
+        public ComponentVerdict Compare(string source, string target)
         {
-            var ra = Find(a);
-            var rb = Find(b);
-            if (ra == rb) return;
+            var (cs, ct) = _components.GetComponentIds(source, target);
 
-            if (_rank[ra] < _rank[rb])
-                (ra, rb) = (rb, ra);
-            _parent[rb] = ra;
-            if (_rank[ra] == _rank[rb])
-                _rank[ra]++;
+            if (cs == null || ct == null)
+                return ComponentVerdict.ScanUnavailable;
+
+            return cs.Value != ct.Value
+                ? ComponentVerdict.DifferentComponents
+                : ComponentVerdict.SameComponent;
+        }
+
+        // ----------------------------------------------------------------
+        // Union-Find (« disjoint set ») sur des identifiants de nœuds (chaînes).
+        // Compression de chemin + union par rang : quasi O(1) amorti par opération.
+        // Structure purement en mémoire, aucun accès base.
+        // ----------------------------------------------------------------
+        private sealed class UnionFind
+        {
+            private readonly Dictionary<string, string> _parent = new Dictionary<string, string>();
+            private readonly Dictionary<string, int> _rank = new Dictionary<string, int>();
+
+            public IReadOnlyCollection<string> Nodes => _parent.Keys;
+
+            private void Ensure(string x)
+            {
+                if (_parent.ContainsKey(x)) return;
+                _parent[x] = x;
+                _rank[x] = 0;
+            }
+
+            public string Find(string x)
+            {
+                Ensure(x);
+                while (_parent[x] != x)
+                {
+                    _parent[x] = _parent[_parent[x]]; // compression de chemin (halving)
+                    x = _parent[x];
+                }
+                return x;
+            }
+
+            public void Union(string a, string b)
+            {
+                var ra = Find(a);
+                var rb = Find(b);
+                if (ra == rb) return;
+
+                if (_rank[ra] < _rank[rb])
+                {
+                    var tmp = ra;
+                    ra = rb;
+                    rb = tmp;
+                }
+                _parent[rb] = ra;
+                if (_rank[ra] == _rank[rb])
+                    _rank[ra]++;
+            }
         }
     }
 }

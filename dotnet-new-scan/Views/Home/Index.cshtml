@@ -7,9 +7,13 @@
     Vérifie s'il existe un chemin orienté entre deux nœuds de la base complète
     (table <code>LINE_VIS_EDG</code>), et affiche le plus court. Le formulaire
     est soumis en <code>GET</code> : l'URL du résultat est partageable.
-    Avant le BFS, les <a asp-controller="Scan" asp-action="Index">pré-calculs</a>
+    Avant le parcours, les <a asp-controller="Scan" asp-action="Index">pré-calculs</a>
     (composantes faibles § 11.4, condensation SCC § 11.5) tranchent le
-    « aucun chemin » sans parcours.
+    « aucun chemin » sans parcours. Le menu <em>Algorithme</em> choisit entre
+    <strong>BFS bidirectionnel</strong>, <strong>Dijkstra</strong>,
+    <strong>Dijkstra bidirectionnel</strong> et <strong>A*</strong> : les arêtes
+    ayant toutes le même poids, les quatre renvoient le même chemin — seul le
+    temps de calcul diffère.
 </p>
 
 @* <form method="get"> : soumission HTML classique, la page se recharge avec
@@ -25,11 +29,24 @@
         <input type="text" name="target" value="@Model.Target"
                placeholder="ex: N50000" autocomplete="off" />
     </label>
+    @* Menu déroulant de choix d'algorithme. name="algo" -> arrive dans
+       HomeController.Index(..., string? algo, ...). L'attribut booléen
+       "selected" est rendu par Razor uniquement quand l'expression vaut true,
+       ce qui garde l'option choisie après le rechargement. *@
+    <label class="field">
+        Algorithme
+        <select name="algo">
+            <option value="bfs" selected="@(Model.Algo == "bfs")">BFS bidirectionnel</option>
+            <option value="dijkstra" selected="@(Model.Algo == "dijkstra")">Dijkstra</option>
+            <option value="dijkstra-bi" selected="@(Model.Algo == "dijkstra-bi")">Dijkstra bidirectionnel</option>
+            <option value="astar" selected="@(Model.Algo == "astar")">A* (heuristique ALT)</option>
+        </select>
+    </label>
     <button type="submit" class="btn btn-primary">Chercher</button>
     <a href="@Url.Action("Index")" class="btn btn-ghost">Effacer</a>
 </form>
 
-@if (Model.InputError is not null)
+@if (Model.InputError != null)
 {
     <div class="banner not-found">@Model.InputError</div>
 }
@@ -61,7 +78,7 @@ else if (Model.Searched)
             ✓ Un chemin existe (@Model.HopCount arête@(Model.HopCount > 1 ? "s" : "")).
             @if (Model.SolvedInMemory)
             {
-                <text>&nbsp;<span class="hint">— BFS résolu sur le graphe en mémoire (§ 11.7)</span></text>
+                <text>&nbsp;<span class="hint">— @Model.AlgoLabel sur le graphe en mémoire (§ 11.7)</span></text>
             }
         </div>
 

@@ -69,9 +69,11 @@ else
 <h2>3. Graphe en mémoire &nbsp;<span class="hint">(§ 11.7)</span></h2>
 <p class="hint">
     Charge tout le graphe orienté en RAM au démarrage (tableaux CSR indexés par
-    entier). Le BFS bidirectionnel tourne alors <strong>entièrement en
+    entier). Les quatre algorithmes de plus court chemin (BFS bidirectionnel,
+    Dijkstra, Dijkstra bidirectionnel, A*) tournent alors <strong>entièrement en
     mémoire</strong> — plus aucun aller-retour SQL par palier, latence divisée
-    par 10 à 100. Rechargé en tâche de fond au lancement de l'application.
+    par 10 à 100. Rechargé en tâche de fond au lancement de l'application ;
+    prépare aussi les repères ALT dont A* a besoin.
 </p>
 @if (Model.Graph is null)
 {
@@ -86,6 +88,7 @@ else
         <tr><td>Chargé (UTC)</td><td>@Model.Graph.LoadedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") &nbsp;(@Model.Graph.DurationMs ms)</td></tr>
         <tr><td>Nœuds / arêtes</td><td>@Model.Graph.NodeCount.ToString("N0") / @Model.Graph.EdgeCount.ToString("N0")</td></tr>
         <tr><td>Empreinte mémoire (~)</td><td>@((Model.Graph.ApproximateBytes / (1024 * 1024)).ToString("N0")) Mo</td></tr>
+        <tr><td>Repères A* (ALT)</td><td>@Model.Graph.LandmarkCount repères précalculés en @Model.Graph.LandmarkMs ms</td></tr>
     </tbody></table>
 }
 <form method="post" asp-controller="Scan" asp-action="ReloadGraph" class="toolbar">
