@@ -80,10 +80,10 @@ BEGIN
             SELECT DTA_1, DTA_2, DTA_3, DTA_4
             FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
             WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 LIKE '%' + @p_env    + '%')
+                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
+            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
+            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
+            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
             GROUP BY DTA_1, DTA_2, DTA_3, DTA_4
         ) AS FilteredDistinct
 
@@ -122,10 +122,10 @@ BEGIN
                 ) AS RowNum
             FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
             WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 LIKE '%' + @p_env    + '%')
+                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
+            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
+            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
+            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
         )
         SELECT
             DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR, @TotalLignes AS TotalLignes
