@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <!-- Cible demandee : .NET 6.0. Le runtime ASP.NET Core 6.0.x est present
+         sur ce poste : l'appli s'execute donc nativement en .NET 6. Le build,
+         lui, se fait avec un SDK plus recent (9 ou 10) car aucun SDK 6 n'est
+         installe. RollForward=LatestMajor est un simple filet de securite au
+         cas ou le runtime 6 disparaitrait.
+         Repli si besoin : passer <TargetFramework> a net8.0. -->
+    <TargetFramework>net6.0</TargetFramework>
+    <RollForward>LatestMajor</RollForward>
+
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- .NET 6 est en fin de support : on assume la cible imposee. -->
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+  </PropertyGroup>
+
+  <!-- Aucun PackageReference : ce projet ne fait que servir les fichiers
+       statiques de ../javascript et rendre une vue .cshtml. -->
+
+</Project>
