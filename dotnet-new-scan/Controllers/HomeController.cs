@@ -2,20 +2,18 @@
 // (GET / sans paramètre) et le résultat d'une recherche
 // (GET /?source=...&target=...). Toute la mise en forme est faite par la vue.
 //
-// Ordre des vérifications, du plus précis au plus fragile, avant le parcours :
-//   1. condensation SCC (§ 11.5) : verdict d'existence orientée EXACT.
-//        NotReachable -> « aucun chemin », sans parcours.
-//   2. sinon (SCC pas calculée) : scan des composantes faibles (§ 11.4).
-//        composantes différentes -> « aucun chemin », sans parcours.
-//   3. sinon : plus court chemin, selon le menu déroulant « algo » —
-//        - "bfs" (défaut)   : BFS bidirectionnel ;
-//        - "dijkstra"       : Dijkstra (file de priorité) ;
-//        - "dijkstra-bi"    : Dijkstra bidirectionnel ;
-//        - "astar"          : A* avec heuristique ALT (repères).
-//        Tout se joue sur le GRAPHE EN MÉMOIRE (§ 11.7) ; s'il n'est pas encore
-//        chargé, repli sur le BFS SQL palier par palier (comme dotnet-mvc/).
-//        Les arêtes ayant toutes le même poids, les quatre donnent le même
-//        chemin — seul le temps d'exécution change (voir docs/algorithmes-chemin).
+// Ordre des vérifications, avant le parcours :
+//   1. (mode SQL seulement) condensation SCC (§ 11.5, si calculée) : verdict
+//        d'existence orientée EXACT. NotReachable -> « aucun chemin », sans parcours.
+//   2. (mode SQL seulement) sinon : scan des composantes faibles (§ 11.4, si
+//        calculé). Composantes différentes -> « aucun chemin », sans parcours.
+//   3. cache applicatif (5 min).
+//   4. sinon : l'algorithme choisi (?algo=), sur le GRAPHE EN MÉMOIRE (§ 11.7).
+//        EnsureLoaded() garantit qu'il est construit (préchargement = simple
+//        optimisation).
+//
+// En mode « graphe généré » (aucune base), les étapes 1-2 sont sautées : le
+// graphe est petit, tout algorithme est sous la milliseconde.
 
 using System;
 using System.Collections.Generic;
@@ -30,20 +28,20 @@ namespace PathFinder.ScanMvc.Controllers
 {
     public class HomeController : Controller
     {
-        private readonly LineVisEdgRepository _repository;
+        private readonly GraphDataProvider _data;
         private readonly GraphScanService _scan;
         private readonly SccCondensationService _sccService;
         private readonly InMemoryGraphService _graph;
         private readonly IMemoryCache _cache;
 
         public HomeController(
-            LineVisEdgRepository repository,
+            GraphDataProvider data,
             GraphScanService scan,
             SccCondensationService sccService,
             InMemoryGraphService graph,
             IMemoryCache cache)
         {
-            _repository = repository;
+            _data = data;
             _scan = scan;
             _sccService = sccService;
             _graph = graph;
@@ -68,6 +66,7 @@ namespace PathFinder.ScanMvc.Controllers
                 Source = (source ?? "").Trim(),
                 Target = (target ?? "").Trim(),
                 Algo = algoKey,
+                SourceDescription = _data.Description,
             };
 
             if (model.Source.Length == 0 && model.Target.Length == 0)
@@ -83,19 +82,24 @@ namespace PathFinder.ScanMvc.Controllers
 
             var effectiveMaxDepth = Math.Min(maxDepth, 20);
 
-            // Pré-calculs : condensation SCC (exacte) puis composantes faibles.
-            var sccReach = _sccService.Reachable(model.Source, model.Target);
-            var weakVerdict = sccReach == SccReach.Unavailable
-                ? _scan.Compare(model.Source, model.Target)
-                : ComponentVerdict.ScanUnavailable;
+            // Pré-calculs : uniquement en mode SQL (grand graphe). En mode
+            // graphe généré, on va directement au parcours.
+            var sccReach = SccReach.Unavailable;
+            var weakVerdict = ComponentVerdict.ScanUnavailable;
+            if (_data.ScanAvailable)
+            {
+                sccReach = _sccService.Reachable(model.Source, model.Target);
+                weakVerdict = sccReach == SccReach.Unavailable
+                    ? _scan.Compare(model.Source, model.Target)
+                    : ComponentVerdict.ScanUnavailable;
+            }
 
             // La clé de cache inclut l'algo : chaque algorithme est mémorisé
             // séparément (même si, à poids uniformes, ils donnent le même chemin).
             var cacheKey = $"path:{model.Algo}:{model.Source}:{model.Target}:{effectiveMaxDepth}";
             model.FromCache = _cache.TryGetValue(cacheKey, out _);
 
-            var solvedInMemory = false;
-            var solvedWith = "bfs";
+            var solvedWith = algoKey;
 
             var result = _cache.GetOrCreate(cacheKey, entry =>
             {
@@ -108,46 +112,33 @@ namespace PathFinder.ScanMvc.Controllers
                 if (weakVerdict == ComponentVerdict.DifferentComponents)
                     return new ShortestPathResult(new List<string>(), false);
 
-                // Algorithme demandé, sur le graphe en mémoire (§ 11.7).
-                ShortestPathResult? inMemory;
+                // Le graphe en mémoire est garanti prêt (le construit maintenant
+                // si le préchargement n'a pas encore fini).
+                _graph.EnsureLoaded();
+
                 switch (algoKey)
                 {
                     case "dijkstra":
-                        inMemory = _graph.ShortestPathDijkstra(model.Source, model.Target, effectiveMaxDepth);
-                        break;
+                        return _graph.ShortestPathDijkstra(model.Source, model.Target, effectiveMaxDepth)!;
                     case "dijkstra-bi":
-                        inMemory = _graph.ShortestPathDijkstraBi(model.Source, model.Target, effectiveMaxDepth);
-                        break;
+                        return _graph.ShortestPathDijkstraBi(model.Source, model.Target, effectiveMaxDepth)!;
                     case "astar":
-                        inMemory = _graph.ShortestPathAStar(model.Source, model.Target, effectiveMaxDepth);
-                        break;
+                        return _graph.ShortestPathAStar(model.Source, model.Target, effectiveMaxDepth)!;
                     default:
-                        inMemory = _graph.ShortestPath(model.Source, model.Target, effectiveMaxDepth);
-                        break;
+                        return _graph.ShortestPath(model.Source, model.Target, effectiveMaxDepth)!;
                 }
-
-                if (inMemory != null)
-                {
-                    solvedInMemory = true;
-                    solvedWith = algoKey;
-                    return inMemory;
-                }
-
-                // Graphe pas encore chargé : repli sur le BFS SQL palier par palier
-                // (poids uniformes -> même chemin de toute façon).
-                return _repository.ShortestPath(model.Source, model.Target, effectiveMaxDepth);
             })!;
 
             model.Found = result.Found;
             model.Path = result.Path;
-            model.SolvedInMemory = solvedInMemory;
+            model.SolvedInMemory = true;
             model.SolvedWith = solvedWith;
             model.SkippedByScc = !result.Found && sccReach == SccReach.NotReachable;
             model.SkippedByScan = !result.Found && sccReach != SccReach.NotReachable
                                   && weakVerdict == ComponentVerdict.DifferentComponents;
 
             if (result.Found && result.Path.Count > 1)
-                model.Edges = _repository.DescribePath(result.Path);
+                model.Edges = _data.DescribePath(result.Path);
 
             return View(model);
         }

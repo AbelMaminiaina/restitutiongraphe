@@ -276,10 +276,28 @@ bullets([
     "cyclique, arbre…) par des images SVG générées côté serveur.",
 ])
 
-h2("1.4  Hors périmètre (ce que l'application ne fait pas)")
+h2("1.4  Fonctionnement sur tous les postes, sans base")
+para("L'application démarre sur N'IMPORTE QUEL poste sans SQL Server ni aucun "
+     "script à exécuter. Au démarrage, GraphDataProvider choisit la source des "
+     "données selon la clé de configuration Data:Source (ou la variable "
+     "d'environnement RESTITUTION_DATA_SOURCE) :")
+table([
+    ("Data:Source", "Comportement"),
+    ("auto (défaut)", "sonde SQL Server (.\\SQLEXPRESS01 / RestitutionGraphe + table LINE_VIS_EDG non vide, timeout 3 s). Joignable -> mode SQL. Sinon -> graphe généré."),
+    ("sql", "force le mode SQL (échoue si la base est absente)"),
+    ("generated", "force le graphe généré en mémoire, même si SQL est disponible"),
+])
+para("Le graphe généré (GeneratedGraphData) : Data:GeneratedNodes nœuds "
+     "(défaut 5 000), 2 à 6 arêtes sortantes chacun, transformation aléatoire "
+     "par arête, GRAINE FIXE — donc exactement le même graphe sur toutes les "
+     "machines. En mode généré, les pré-calculs § 11.4 / § 11.5 (qui écrivent "
+     "des tables SQL) sont désactivés : sur un petit graphe toute recherche "
+     "est déjà sous la milliseconde. Tout le reste fonctionne à l'identique.")
+
+h2("1.5  Hors périmètre (ce que l'application ne fait pas)")
 bullets([
     "Aucune écriture dans dbo.LINE_VIS_EDG : l'application lit le graphe, elle "
-    "ne le modifie jamais. Elle crée en revanche ses propres tables de "
+    "ne le modifie jamais. En mode SQL elle crée ses propres tables de "
     "pré-calcul (NODE_COMPONENT, NODE_SCC, SCC_EDGE).",
     "Aucun JavaScript, aucune API JSON, aucun projet front séparé : tout est "
     "rendu en HTML/CSS côté serveur (vues Razor), les graphes sont dessinés "
@@ -324,9 +342,6 @@ bullets([
     "à un paramètre NVARCHAR force SQL Server à convertir la colonne, donc un "
     "balayage complet (scan) au lieu d'une recherche d'index (seek). Chaque "
     "paramètre est donc typé explicitement VARCHAR (méthode AddVarChar).",
-    "Une requête SQL Server accepte au plus ~2 100 paramètres : les parcours "
-    "par paliers (BFS SQL de repli) découpent la frontière en lots de 1 000 "
-    "(constante ParamBatch).",
     "La clé d'un index classique est plafonnée à 900 octets : les tables de "
     "pré-calcul utilisent VARCHAR(450) pour la colonne d'identifiant, pas "
     "VARCHAR(8000).",
@@ -343,8 +358,8 @@ para("Ces trois tables sont recréées intégralement (DROP + CREATE + chargemen
      "en masse par SqlBulkCopy) à chaque exécution du pré-calcul correspondant. "
      "Opérations idempotentes.")
 
-h2("2.4  Connexion à la base")
-kv("Serveur par défaut", r"localhost\SQLEXPRESS01  (authentification Windows, Trusted_Connection=True)")
+h2("2.4  Connexion à la base (mode SQL)")
+kv("Serveur par défaut", r".\SQLEXPRESS01  (authentification Windows, Trusted_Connection=True)")
 kv("Base par défaut", "RestitutionGraphe")
 kv("Surcharge", "variables d'environnement RESTITUTION_DB_SERVER / RESTITUTION_DB_NAME, "
    "ou clés de configuration Database:Server / Database:Name")
@@ -362,7 +377,8 @@ table([
     ("Framework", "ASP.NET Core MVC (contrôleurs + vues Razor)"),
     ("Cible", ".NET 7.0  /  langage C# 8.0  (voir § 6.1)"),
     ("Rendu", "100 % côté serveur — HTML/CSS + SVG. Aucun JavaScript."),
-    ("Accès données", "Microsoft.Data.SqlClient 5.2.2 (ADO.NET, requêtes paramétrées, SqlBulkCopy)"),
+    ("Source des données", "SQL Server si joignable, sinon graphe généré en mémoire (aucune base requise) — GraphDataProvider"),
+    ("Accès SQL", "Microsoft.Data.SqlClient 5.2.2 (ADO.NET, requêtes paramétrées, SqlBulkCopy) — mode SQL uniquement"),
     ("Asynchronisme", "Aucun : pas d'async / await. Préchargement sur un Thread dédié."),
     ("État applicatif", "Services singletons en mémoire + IMemoryCache borné"),
 ])
@@ -376,20 +392,22 @@ table([
     ("Couche", "Fichiers", "Responsabilité"),
     ("Controllers", "HomeController, ScanController, GraphesController",
      "Aiguillage HTTP, orchestration, remplissage des ViewModels"),
-    ("Models — repositories", "LineVisEdgRepository, NodeComponentRepository, SccRepository",
-     "TOUTES les requêtes SQL. Aucun algorithme."),
+    ("Source des données", "GraphDataProvider, GeneratedGraphData, LineVisEdgRepository",
+     "Choisit SQL ou graphe généré ; fournit les arêtes en flux + les transformations. Seul LineVisEdgRepository contient du SQL."),
+    ("Models — repositories SQL", "NodeComponentRepository, SccRepository",
+     "Persistance des pré-calculs (tables NODE_COMPONENT / NODE_SCC / SCC_EDGE). Mode SQL uniquement."),
     ("Models — ViewModels / données", "PathViewModel, ScanPageViewModel, GraphSample(s)",
      "Structures passées aux vues ; catalogue des graphes d'exemple"),
-    ("Services", "InMemoryGraphService + DirectedGraph + GraphPreloader, "
-                 "GraphScanService, SccCondensationService, SvgGraphRenderer",
+    ("Services — algorithmes", "InMemoryGraphService + DirectedGraph + GraphPreloader, "
+                               "GraphScanService, SccCondensationService, SvgGraphRenderer",
      "TOUS les algorithmes (parcours, Union-Find, Kosaraju, rendu SVG). Aucune requête SQL."),
     ("Views", "Home/Index, Scan/Index, Graphes/Index+Build, Shared/_Layout",
      "Mise en forme HTML/SVG, formulaires GET/POST"),
 ])
 para("Règle de séparation stricte, répétée dans les en-têtes de fichiers : "
-     "un service ne contient jamais de SqlConnection / SqlCommand ; un "
-     "repository ne contient jamais d'algorithme. Le point de contact est une "
-     "méthode qui renvoie un IEnumerable en flux (ex. StreamAllDirectedEdges).")
+     "un service ne contient jamais de SqlConnection / SqlCommand ; seul "
+     "LineVisEdgRepository en contient. Les services consomment les arêtes via "
+     "GraphDataProvider, sans savoir d'où elles viennent (SQL ou généré).")
 
 h2("3.3  Schéma des couches")
 code(
@@ -398,20 +416,20 @@ code(
     "        ▼\n"
     "Controllers (Home, Scan, Graphes)\n"
     "        │\n"
-    "        ├──────────────┬───────────────────┬─────────────────┐\n"
-    "        ▼              ▼                   ▼                 ▼\n"
-    "SccCondensation   GraphScanService   InMemoryGraphService  SvgGraphRenderer\n"
-    "  Service            (Union-Find)     + DirectedGraph        (galerie)\n"
-    "  (Kosaraju)             │             (CSR + 4 algos)\n"
+    "        ├────────────────┬───────────────────┬──────────────────┐\n"
+    "        ▼                ▼                   ▼                  ▼\n"
+    "SccCondensation     GraphScanService   InMemoryGraphService  SvgGraphRenderer\n"
+    "  Service (Kosaraju)   (Union-Find)     + DirectedGraph        (galerie)\n"
+    "        │                │              (CSR + 4 algos)\n"
     "        │                │                   │\n"
-    "        ▼                ▼                   ▼\n"
-    "SccRepository    NodeComponentRepo    LineVisEdgRepository\n"
-    "  (NODE_SCC,        (NODE_COMPONENT)    (LINE_VIS_EDG, lecture seule\n"
-    "   SCC_EDGE)                             + BFS SQL de repli)\n"
-    "        │                │                   │\n"
-    "        └────────────────┴─────────┬─────────┘\n"
-    "                                   ▼\n"
-    "                       SQL Server  RestitutionGraphe\n",
+    "        │        ┌───────┴──────── GraphDataProvider ─────────┐\n"
+    "        │        ▼                                            ▼\n"
+    "        │   LineVisEdgRepository (mode SQL)          GeneratedGraphData\n"
+    "        │        │   lecture LINE_VIS_EDG              (graphe en RAM,\n"
+    "        ▼        ▼   (StreamAll*, CanConnect)           graine fixe)\n"
+    "SccRepository  NodeComponentRepo\n"
+    "  (NODE_SCC,     (NODE_COMPONENT)   ─────►  SQL Server  RestitutionGraphe\n"
+    "   SCC_EDGE)                                (mode SQL uniquement)\n",
     caption="")
 
 h2("3.4  Injection de dépendances (Program.cs)")
@@ -423,15 +441,18 @@ code(method("Program.cs", "public static void Main(string[] args)"),
 
 h2("3.5  Cycle de vie au démarrage")
 numbered([
+    "GraphDataProvider est construit : il choisit la source (sonde SQL en mode "
+    "auto), et l'écrit dans le log (« Source de données : … »).",
     "Le serveur démarre et accepte les requêtes immédiatement.",
     "GraphPreloader (IHostedService) lance un Thread d'arrière-plan qui appelle "
-    "InMemoryGraphService.Reload().",
-    "Reload() lit toutes les arêtes orientées (un seul SELECT sans WHERE), "
-    "construit la structure CSR en RAM, puis prépare les repères ALT de A* "
-    "(quelques BFS complets).",
-    "Pendant ces quelques secondes, les recherches passent par le BFS SQL "
-    "palier par palier (repli). Dès que le graphe est prêt (_graph devient "
-    "non nul, champ volatile), les recherches basculent en mémoire.",
+    "InMemoryGraphService.EnsureLoaded().",
+    "EnsureLoaded() -> Reload() lit toutes les arêtes orientées (un seul SELECT "
+    "sans WHERE en mode SQL, ou la liste en RAM en mode généré), construit la "
+    "structure CSR, puis prépare les repères ALT de A* (quelques BFS complets).",
+    "Si une recherche arrive avant la fin du préchargement, HomeController "
+    "appelle EnsureLoaded() qui construit le graphe SOUS VERROU (une seule "
+    "fois). Le préchargement n'est donc qu'une optimisation — il n'y a plus de "
+    "repli SQL palier par palier.",
 ])
 para("Aucun async : le préchargement est un Thread classique en arrière-plan.", bold=True)
 code(between("Services/InMemoryGraphService.cs",
@@ -467,14 +488,15 @@ numbered([
     "cible. », pas de recherche.",
     "Source ET cible remplies → recherche. On normalise d'abord l'algorithme "
     "sur l'une des quatre valeurs connues (défaut bfs).",
-    "Vérification 1 — condensation SCC (§ 11.5, si calculée) : verdict EXACT "
-    "d'atteignabilité orientée. « NotReachable » → « aucun chemin », sans "
-    "aucun parcours.",
-    "Vérification 2 — sinon, scan des composantes faibles (§ 11.4, si "
-    "calculé) : si source et cible sont dans des composantes différentes → "
-    "« aucun chemin », sans parcours.",
-    "Sinon — parcours avec l'algorithme demandé, sur le graphe en mémoire s'il "
-    "est chargé ; sinon repli sur le BFS SQL palier par palier.",
+    "Vérification 1 (mode SQL seulement) — condensation SCC (§ 11.5, si "
+    "calculée) : verdict EXACT d'atteignabilité orientée. « NotReachable » → "
+    "« aucun chemin », sans aucun parcours.",
+    "Vérification 2 (mode SQL seulement) — sinon, scan des composantes faibles "
+    "(§ 11.4, si calculé) : si source et cible sont dans des composantes "
+    "différentes → « aucun chemin », sans parcours.",
+    "Sinon — EnsureLoaded() (construit le graphe en mémoire si le préchargement "
+    "n'a pas fini), puis parcours avec l'algorithme demandé. TOUJOURS en "
+    "mémoire : il n'y a pas de repli SQL.",
     "Le résultat (trouvé / non trouvé + chemin) est mémorisé 5 minutes dans le "
     "cache applicatif, sous une clé qui inclut l'algorithme.",
 ])
@@ -491,8 +513,9 @@ bullets([
     "Chaîne de nœuds : source → … → cible, la source et la cible mises en "
     "évidence.",
     "Tableau détaillé : une ligne par arête du chemin (numéro, De, Vers, "
-    "Transformation). La transformation est relue en base pour chaque arête "
-    "consécutive (méthode DescribePath).",
+    "Transformation). La transformation vient de GraphDataProvider.DescribePath "
+    "(relue en base en mode SQL, ou dans le graphe généré).",
+    "En tête de page : « Source : … » (SQL Server ou graphe généré).",
     "Si source = cible : « Chemin de longueur 0 ».",
     "Note « Résultat servi depuis le cache applicatif (5 min) » le cas échéant.",
 ])
@@ -514,16 +537,19 @@ kv("Plafond", "SizeLimit = 10 000 entrées (chaque entrée compte pour 1)")
 # ---- 4.2 --------------------------------------------------------------
 h2("4.2  Écran « Pré-calculs / Scan »  (route /Scan)")
 
-para("Tableau de bord des trois optimisations. Chacune balaie la base une fois "
-     "et écrit son propre résultat. Les actions sont en POST-redirect-GET "
-     "(bouton → POST → recalcul → redirection vers /Scan) et protégées par un "
-     "jeton anti-forgery.")
+para("Tableau de bord des trois optimisations. La page affiche d'abord la "
+     "source des données. Les actions sont en POST-redirect-GET (bouton → POST "
+     "→ recalcul → redirection vers /Scan) et protégées par un jeton "
+     "anti-forgery.")
 table([
-    ("Bloc", "Route POST", "Effet", "Table(s) écrite(s)"),
-    ("1. Composantes faibles (§ 11.4)", "/Scan/Run", "Union-Find sur toutes les arêtes (sens ignoré)", "NODE_COMPONENT"),
-    ("2. Condensation SCC (§ 11.5)", "/Scan/RunScc", "Kosaraju + graphe condensé", "NODE_SCC, SCC_EDGE"),
-    ("3. Graphe en mémoire (§ 11.7)", "/Scan/ReloadGraph", "Reconstruit la structure CSR + les repères ALT", "aucune (RAM)"),
+    ("Bloc", "Route POST", "Effet", "Disponible"),
+    ("1. Composantes faibles (§ 11.4)", "/Scan/Run", "Union-Find sur toutes les arêtes → NODE_COMPONENT", "mode SQL seulement"),
+    ("2. Condensation SCC (§ 11.5)", "/Scan/RunScc", "Kosaraju + graphe condensé → NODE_SCC, SCC_EDGE", "mode SQL seulement"),
+    ("3. Graphe en mémoire (§ 11.7)", "/Scan/ReloadGraph", "Reconstruit la structure CSR + les repères ALT (RAM)", "tous modes"),
 ])
+para("En mode graphe généré, les blocs 1 et 2 affichent « réservé au mode "
+     "SQL » et les POST correspondants répondent par un message (aucune "
+     "action). Le petit graphe généré n'en a de toute façon aucun besoin.")
 para("Chaque bloc affiche l'état du dernier calcul : date UTC, durée, nombre de "
      "nœuds / arêtes, nombre de composantes, taille de la plus grande, et pour "
      "le graphe en mémoire l'empreinte (~Mo) et le nombre de repères ALT.")
@@ -582,13 +608,19 @@ code(between("Services/DirectedGraph.cs",
 
 h3("5.1.3  Construction")
 para("DirectedGraph.Build consomme le flux d'arêtes orientées "
-     "(LineVisEdgRepository.StreamAllDirectedEdges) : indexation des nœuds, "
-     "comptage des degrés, sommes préfixes → offsets, remplissage. O(n + m), "
-     "une seule passe sur les arêtes plus une passe de remplissage.")
+     "(GraphDataProvider.StreamAllDirectedEdges — SQL ou graphe généré) : "
+     "indexation des nœuds, comptage des degrés, sommes préfixes → offsets, "
+     "remplissage. O(n + m), une seule passe sur les arêtes plus une passe de "
+     "remplissage.")
+para("En mode SQL, la lecture est un seul SELECT sans WHERE, en flux :", bold=True)
 code(between("Models/LineVisEdgRepository.cs",
              "public IEnumerable<(string From, string To)> StreamAllDirectedEdges()",
              "yield return ToEdge(reader.GetString(0), reader.GetString(1), reader.GetString(2));"),
      "C# — Models/LineVisEdgRepository.cs")
+para("En mode graphe généré, le graphe est produit une fois au démarrage "
+     "(graine fixe), et Build itère simplement la liste en mémoire :", bold=True)
+code(method("Services/GeneratedGraphData.cs", "public GeneratedGraphData(int nodeCount = 5000)"),
+     "C# — Services/GeneratedGraphData.cs")
 
 # ---- 5.2 --------------------------------------------------------------
 h2("5.2  Les quatre algorithmes de plus court chemin")
@@ -662,9 +694,11 @@ code(between("Services/DirectedGraph.cs",
 
 h3("5.2.6  Comparatif")
 para("Mesures : moyenne sur 200–300 appels, sur le graphe en mémoire, hors "
-     "serveur web et hors cache (jeu de démonstration : 100 008 nœuds, "
-     "400 787 arêtes, graphe aléatoire, poids = 1). Machine de développement — "
-     "c'est le rapport entre algorithmes qui compte.")
+     "serveur web et hors cache (mode SQL, jeu de démonstration : 100 008 "
+     "nœuds, 400 787 arêtes, graphe aléatoire, poids = 1). Machine de "
+     "développement — c'est le rapport entre algorithmes qui compte. En mode "
+     "graphe généré (5 000 nœuds) tous les algorithmes sont sous la "
+     "milliseconde, les écarts restent dans le même sens.")
 table([
     ("Algorithme", "Temps (pire cas)", "Chemin existant (médiane)", "Aucun chemin", "Correct si poids ≠ 1"),
     ("BFS bidirectionnel", "O(b^(R/2))", "0,06 ms", "22,8 ms", "non"),
@@ -694,9 +728,9 @@ code(between("Controllers/HomeController.cs",
              "var algoKey = (algo ?? ",
              "};"),
      "C# — Controllers/HomeController.cs")
-para("Puis, dans la fabrique du cache : court-circuits SCC / scan, sinon "
-     "switch sur algoKey vers la bonne méthode du graphe en mémoire, sinon "
-     "repli BFS SQL (voir l'extrait du § 4.1.2).")
+para("Puis, dans la fabrique du cache : court-circuits SCC / scan (mode SQL), "
+     "sinon EnsureLoaded() puis switch sur algoKey vers la bonne méthode du "
+     "graphe en mémoire — toujours en mémoire (voir l'extrait du § 4.1.2).")
 
 # ---- 5.3 --------------------------------------------------------------
 h2("5.3  Pré-calcul § 11.4 — Composantes connexes faibles (Union-Find)")
@@ -706,12 +740,13 @@ para("But : regrouper les nœuds par « île » en ignorant le sens des arêtes.
      "entre eux, même non orienté — verdict certain, jamais un faux « non ». "
      "La connexité faible est une condition nécessaire d'existence d'un chemin.")
 numbered([
-    "Balayer toutes les arêtes (StreamAllEdges, sens non dérivé) et les "
-    "fusionner dans une structure Union-Find en mémoire (compression de "
-    "chemin + union par rang, quasi O(1) amorti).",
+    "Balayer toutes les arêtes (GraphDataProvider.StreamAllEdges, sens non "
+    "dérivé) et les fusionner dans une structure Union-Find en mémoire "
+    "(compression de chemin + union par rang, quasi O(1) amorti).",
     "Attribuer un numéro de composante (0, 1, 2…) par racine.",
     "Écrire (NodeId, ComponentId) en masse dans dbo.NODE_COMPONENT.",
 ])
+para("Réservé au mode SQL : ScanController ne l'appelle qu'alors.", italic=True)
 para("À la recherche, comparaison en O(1) :", bold=True)
 code(method("Services/GraphScanService.cs",
             "public ComponentVerdict Compare(string source, string target)"),
@@ -746,12 +781,13 @@ h2("5.5  Pipeline complet avant parcours")
 para("Résumé de l'ordre, du plus précis / le moins coûteux au plus général :")
 table([
     ("Étape", "Coût", "Peut conclure ?"),
-    ("1. Condensation SCC (si calculée)", "O(1) + petit BFS condensé", "OUI (chemin existe) ou NON (exact), sans parcours"),
-    ("2. Composantes faibles (si SCC absente)", "O(1)", "NON seulement (îles différentes), sans parcours"),
+    ("1. Condensation SCC (mode SQL, si calculée)", "O(1) + petit BFS condensé", "OUI (chemin existe) ou NON (exact), sans parcours"),
+    ("2. Composantes faibles (mode SQL, si SCC absente)", "O(1)", "NON seulement (îles différentes), sans parcours"),
     ("3. Cache applicatif", "O(1)", "OUI, résultat déjà calculé < 5 min"),
-    ("4. Parcours (algo choisi, en mémoire)", "voir § 5.2.6", "OUI / NON définitif"),
-    ("5. Repli BFS SQL (graphe pas encore chargé)", "réseau + SQL par palier", "OUI / NON définitif"),
+    ("4. EnsureLoaded() + parcours (algo choisi, en mémoire)", "voir § 5.2.6", "OUI / NON définitif"),
 ])
+para("Il n'y a plus d'étape « repli SQL » : le parcours est TOUJOURS en "
+     "mémoire, EnsureLoaded() garantit que le graphe est construit.", italic=True)
 
 # ---- 5.6 --------------------------------------------------------------
 h2("5.6  Cache applicatif")
@@ -808,13 +844,13 @@ table([
 
 h2("6.3  Performance")
 bullets([
-    "Chargement CSR au démarrage : ~1,2–2,0 s pour 100 000 nœuds ; repères "
-    "ALT : ~0,2–0,5 s de plus. En tâche de fond, le serveur répond pendant "
-    "ce temps.",
+    "Chargement CSR au démarrage : ~1,2–2,0 s pour 100 000 nœuds (mode SQL), "
+    "~35 ms pour 5 000 nœuds (mode généré) ; repères ALT : ~0,2–0,5 s de plus "
+    "en mode SQL. En tâche de fond, le serveur répond pendant ce temps.",
     "Recherche en mémoire : voir tableau § 5.2.6 (de 0,04 ms à ~20 ms selon "
-    "l'algorithme et le cas).",
-    "Recherche par repli SQL : dépend du réseau et de la profondeur ; c'est "
-    "l'ancien mode de dotnet-mvc, borné à 30 000 nœuds par sens.",
+    "l'algorithme et le cas, mode SQL ; toujours < 1 ms en mode généré).",
+    "Premier appel avant fin du préchargement : EnsureLoaded() bloque la "
+    "requête le temps de construire le graphe (rare, ~2 s en mode SQL).",
     "Cache 5 min : une 2e requête identique répond en O(1).",
 ])
 
@@ -824,7 +860,8 @@ table([
     ("maxDepth (défaut 12, ≤ 20)", "HomeController", "Plafonne la longueur de chemin cherchée"),
     ("MaxVisitedPerSide = 300 000", "DirectedGraph (BFS bi)", "Plafonne les nœuds visités par sens"),
     ("MaxVisited = 600 000", "DirectedGraph (Dijkstra, Dijkstra bi, A*)", "Plafonne les nœuds figés"),
-    ("maxVisitedPerSide = 30 000", "LineVisEdgRepository (BFS SQL)", "Idem, plus strict (latence réseau)"),
+    ("verrou _loadLock", "InMemoryGraphService", "EnsureLoaded() ne construit le graphe qu'une seule fois même sous requêtes concurrentes"),
+    ("Connect Timeout = 3 s", "LineVisEdgRepository.CanConnect", "La sonde SQL du mode auto ne retarde pas le démarrage si la base est absente"),
     ("CommandTimeout = 0", "lectures en flux (StreamAll*)", "Pas de timeout sur les gros SELECT"),
     ("try/catch SqlException", "repositories de scan", "Table absente (scan jamais lancé) → on laisse le parcours agir"),
 ])
@@ -845,12 +882,14 @@ bullets([
 h2("6.6  Limites connues")
 bullets([
     "Poids d'arêtes non gérés (uniformes = 1) — voir § 5.2.1.",
+    "Mode graphe généré : c'est une DÉMONSTRATION, pas les vraies données. "
+    "Les pré-calculs § 11.4 / § 11.5 y sont désactivés.",
     "Les tables de pré-calcul sont recréées en entier à chaque exécution : "
     "pas de mise à jour incrémentale, et une exécution concurrente de deux "
     "scans du même type n'est pas protégée (usage attendu : un opérateur, "
     "ponctuellement).",
-    "Le graphe en mémoire est un instantané : après modification de "
-    "LINE_VIS_EDG il faut relancer /Scan/ReloadGraph (et les deux autres "
+    "Le graphe en mémoire est un instantané : après modification de la source "
+    "il faut relancer /Scan/ReloadGraph (et, en mode SQL, les deux autres "
     "pré-calculs).",
     "Montée en charge mémoire : ~40 octets/arête + ~30 octets/nœud pour le "
     "CSR, plus les repères ALT ; au-delà de quelques millions de nœuds, "
@@ -864,17 +903,20 @@ h1("7. Inventaire des fichiers")
 table([
     ("Fichier", "Type", "Rôle"),
     ("Program.cs", "Démarrage", "Injection de dépendances, route MVC par défaut, hosted service"),
-    ("Controllers/HomeController.cs", "Controller", "Recherche de chemin : pipeline SCC → scan → algo → cache"),
-    ("Controllers/ScanController.cs", "Controller", "Page /Scan : statuts + déclenchement des pré-calculs"),
+    ("appsettings.json", "Configuration", "Data:Source (auto|sql|generated), Data:GeneratedNodes, Database:*"),
+    ("Controllers/HomeController.cs", "Controller", "Recherche de chemin : (mode SQL) SCC → scan, puis EnsureLoaded + algo + cache"),
+    ("Controllers/ScanController.cs", "Controller", "Page /Scan : statuts + déclenchement des pré-calculs (refusés hors mode SQL)"),
     ("Controllers/GraphesController.cs", "Controller", "Galerie « types de graphes » + génération de fichiers SVG"),
-    ("Models/LineVisEdgRepository.cs", "Repository", "LINE_VIS_EDG : BFS SQL de repli, DescribePath, StreamAllEdges / StreamAllDirectedEdges"),
+    ("Services/GraphDataProvider.cs", "Service", "Choisit la source (SQL / généré) ; StreamAll*, DescribePath, ScanAvailable"),
+    ("Services/GeneratedGraphData.cs", "Service", "Graphe de démonstration généré en RAM (graine fixe) — aucune base requise"),
+    ("Models/LineVisEdgRepository.cs", "Repository", "Mode SQL : CanConnect, DescribePath, StreamAllEdges / StreamAllDirectedEdges"),
     ("Models/NodeComponentRepository.cs", "Repository", "NODE_COMPONENT : ReplaceAll, GetComponentIds"),
     ("Models/SccRepository.cs", "Repository", "NODE_SCC + SCC_EDGE : ReplaceAll, GetSccIds, LoadCondensedAdjacency"),
-    ("Models/PathViewModel.cs", "ViewModel", "Données de l'écran de recherche (dont AlgoLabel)"),
-    ("Models/ScanPageViewModel.cs", "ViewModel", "Statuts des trois pré-calculs"),
+    ("Models/PathViewModel.cs", "ViewModel", "Données de l'écran de recherche (dont AlgoLabel, SourceDescription)"),
+    ("Models/ScanPageViewModel.cs", "ViewModel", "Statuts des trois pré-calculs + source + ScanAvailable"),
     ("Models/GraphSample.cs / GraphSamples.cs", "Données", "Catalogue codé en dur des graphes d'exemple"),
     ("Services/DirectedGraph.cs", "Service", "Structure CSR + BFS bi, Dijkstra, Dijkstra bi, A* (ALT), PrepareLandmarks"),
-    ("Services/InMemoryGraphService.cs", "Service", "Chargement CSR + repères au démarrage (Thread), passe-plats, GraphStatus"),
+    ("Services/InMemoryGraphService.cs", "Service", "Reload / EnsureLoaded / GraphPreloader (Thread), passe-plats, GraphStatus"),
     ("Services/GraphScanService.cs", "Service", "§ 11.4 — Union-Find, Compare"),
     ("Services/SccCondensationService.cs", "Service", "§ 11.5 — Kosaraju, condensation, Reachable"),
     ("Services/SvgGraphRenderer.cs", "Service", "GraphSample → SVG (layouts circulaire / par niveaux)"),
@@ -908,7 +950,8 @@ gloss = [
     ("Kosaraju", "Algorithme de calcul des SCC en deux parcours en profondeur (un sur le graphe, un sur le graphe inversé)."),
     ("CSR (Compressed Sparse Row)", "Représentation compacte d'un graphe : les voisins de tous les nœuds concaténés dans un tableau, plus un tableau d'offsets."),
     ("ToEdge / Direction", "Règle qui transforme une ligne (Nodes, Direction, NodesLie) en arête orientée."),
-    ("Repli (fallback) SQL", "Quand le graphe en mémoire n'est pas encore chargé : le parcours se fait par requêtes SQL palier par palier, comme dans dotnet-mvc."),
+    ("Mode auto / SQL / généré", "auto : SQL si joignable, sinon graphe généré. sql : force SQL. generated : force le graphe de démo en mémoire (aucune base)."),
+    ("EnsureLoaded()", "Construit le graphe en mémoire à la demande, sous verrou, s'il n'est pas déjà prêt. Remplace l'ancien repli SQL palier par palier."),
 ]
 for term, definition in gloss:
     p = doc.add_paragraph()
@@ -919,8 +962,9 @@ doc.add_page_break()
 
 # ==========================================================================
 h1("Annexe — Détail des durées mesurées")
-para("ms par appel, moyenne sur 200 appels, jeu de démonstration, hors serveur "
-     "et hors cache. Longueur du chemin entre parenthèses.")
+para("ms par appel, moyenne sur 200 appels, MODE SQL, jeu de démonstration "
+     "100 008 nœuds, hors serveur et hors cache. Longueur du chemin entre "
+     "parenthèses. En mode graphe généré (5 000 nœuds), tout est < 1 ms.")
 table([
     ("Couple", "BFS bidir.", "Dijkstra", "Dijkstra bidir.", "A* (ALT)"),
     ("N1 → N500 (9)", "0,14", "52,6", "0,64", "17,7"),

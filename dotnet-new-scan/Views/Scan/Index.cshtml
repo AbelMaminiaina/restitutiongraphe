@@ -4,9 +4,23 @@
 }
 
 <p class="hint">
+    <strong>Source des données :</strong> @Model.SourceDescription
+</p>
+
+@if (!Model.ScanAvailable)
+{
+    <div class="banner not-found">
+        Mode <strong>graphe généré</strong> (aucune base). Les pré-calculs
+        § 11.4 / § 11.5 sont réservés au mode SQL (grand graphe) : ici le
+        graphe est petit et la recherche est déjà instantanée sans eux. Seul
+        le rechargement du graphe en mémoire (§ 11.7) est disponible.
+    </div>
+}
+
+<p class="hint">
     Deux pré-calculs, indépendants, accélèrent la recherche d'existence d'un
-    chemin. Chacun balaie <code>LINE_VIS_EDG</code> une fois et écrit ses
-    propres tables.
+    chemin sur le grand graphe SQL. Chacun balaie <code>LINE_VIS_EDG</code> une
+    fois et écrit ses propres tables.
 </p>
 
 @if (TempData["ScanMessage"] is string msg)
@@ -78,13 +92,14 @@ else
 @if (Model.Graph is null)
 {
     <div class="banner not-found">
-        Pas encore chargé (chargement en cours, ou échec). La recherche utilise
-        le BFS SQL en attendant.
+        Pas encore chargé (préchargement en cours). Il sera construit à la
+        première recherche.
     </div>
 }
 else
 {
     <table class="edges"><tbody>
+        <tr><td>Source</td><td>@Model.Graph.SourceDescription</td></tr>
         <tr><td>Chargé (UTC)</td><td>@Model.Graph.LoadedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") &nbsp;(@Model.Graph.DurationMs ms)</td></tr>
         <tr><td>Nœuds / arêtes</td><td>@Model.Graph.NodeCount.ToString("N0") / @Model.Graph.EdgeCount.ToString("N0")</td></tr>
         <tr><td>Empreinte mémoire (~)</td><td>@((Model.Graph.ApproximateBytes / (1024 * 1024)).ToString("N0")) Mo</td></tr>
@@ -96,7 +111,7 @@ else
 </form>
 
 <p class="hint">
-    À relancer après toute modification de <code>LINE_VIS_EDG</code>. Ordre
-    d'utilisation dans la recherche : condensation SCC (exacte) → composantes
-    faibles → BFS (en mémoire si chargé, sinon SQL).
+    À relancer après toute modification de la source. Ordre d'utilisation dans
+    la recherche : (mode SQL) condensation SCC exacte → composantes faibles →
+    l'algorithme choisi, toujours sur le graphe en mémoire.
 </p>

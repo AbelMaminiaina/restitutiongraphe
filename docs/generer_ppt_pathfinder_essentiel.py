@@ -170,7 +170,7 @@ r.text = ("dotnet-new-scan / PathFinder.ScanMvc\n"
           "graphe en mémoire + quatre algorithmes de parcours")
 r.font.size = Pt(18)
 r.font.color.rgb = GREY
-footnote(s, "ASP.NET Core MVC (Razor) · C# 8.0 / .NET 7.0 · aucun JavaScript")
+footnote(s, "ASP.NET Core MVC (Razor) · C# 8.0 / .NET 7.0 · aucun JavaScript · aucune base requise")
 
 # =======================================================================
 # 2. LE PROBLÈME
@@ -179,8 +179,8 @@ s = new_slide("Le problème", "Ce que fait PathFinder")
 bullets(s, [
     "Question : existe-t-il un chemin orienté entre deux nœuds du graphe, et "
     "quel est le plus court ?",
-    "Le graphe : la table SQL Server dbo.LINE_VIS_EDG (jeu de démo : "
-    "100 008 nœuds, 400 787 arêtes).",
+    "Le graphe : la table SQL Server dbo.LINE_VIS_EDG (jeu de démo : 100 008 "
+    "nœuds) — ou, si SQL est absent, un graphe généré en mémoire (5 000 nœuds).",
     "Un nœud = une valeur qui apparaît en colonne Nodes ou NodesLie. Pas de "
     "table de nœuds séparée.",
     "Résultat affiché : la chaîne source → … → cible, et la transformation "
@@ -215,9 +215,12 @@ bullets(s, [
     "Au démarrage, tout le graphe est chargé en RAM en tableaux d'entiers "
     "(format CSR, Compressed Sparse Row).",
     "Chargement sur un Thread d'arrière-plan (pas d'async) : le serveur répond "
-    "tout de suite ; repli sur le BFS SQL tant que le graphe n'est pas prêt.",
-    "~12 Mo pour 100 000 nœuds ; chargement ~1,2–2,0 s.",
-], y=Inches(1.7), h=Inches(2.3), size=15)
+    "tout de suite ; EnsureLoaded() le construit à la 1re recherche s'il n'est "
+    "pas prêt.",
+    "Source : SQL Server si joignable, sinon graphe généré en mémoire "
+    "(aucune base requise — voir dernière diapo).",
+    "~12 Mo / ~1,2–2,0 s (SQL, 100 000 nœuds) · ~35 ms (généré, 5 000 nœuds).",
+], y=Inches(1.7), h=Inches(2.3), size=14)
 code(s,
      "_names[i]     : indice -> nom du nœud            (n entrées)\n"
      "_index[nom]   : nom -> indice\n"
@@ -284,19 +287,18 @@ bullets(s, [
 # =======================================================================
 s = new_slide("Avant de lancer un parcours", "HomeController — ordre des vérifications")
 code(s,
-     "1.  Condensation SCC (§ 11.5, si calculée)\n"
+     "1.  (mode SQL) Condensation SCC (§ 11.5, si calculée)\n"
      "        NotReachable  ->  « aucun chemin »   (verdict EXACT, sans parcours)\n"
      "\n"
-     "2.  sinon : Composantes faibles (§ 11.4, si calculées)\n"
+     "2.  (mode SQL) sinon : Composantes faibles (§ 11.4, si calculées)\n"
      "        îles différentes  ->  « aucun chemin »   (sans parcours)\n"
      "\n"
-     "3.  sinon : Cache applicatif (5 min)  ->  résultat déjà connu ?\n"
+     "3.  Cache applicatif (5 min)  ->  résultat déjà connu ?\n"
      "\n"
-     "4.  sinon : Parcours avec l'algo choisi, sur le graphe en mémoire\n"
-     "\n"
-     "5.  graphe pas encore chargé  ->  repli BFS SQL palier par palier",
+     "4.  sinon : EnsureLoaded()  puis  l'algo choisi\n"
+     "        TOUJOURS sur le graphe en mémoire — plus de repli SQL",
      y=Inches(1.8), h=Inches(4.4), size=14)
-footnote(s, "Les deux pré-calculs (§ 11.4 / § 11.5) se déclenchent depuis la page /Scan.")
+footnote(s, "En mode graphe généré, les étapes 1-2 sont sautées (petit graphe, recherche déjà instantanée).")
 
 # =======================================================================
 # 9. DURÉES MESURÉES
@@ -344,17 +346,34 @@ bullets(s, [
 ], y=Inches(1.8), size=15)
 
 # =======================================================================
+# 11 bis. MARCHE SUR TOUS LES POSTES, SANS BASE
+# =======================================================================
+s = new_slide("Marche sur tous les postes", "Aucune base, aucun script SQL")
+bullets(s, [
+    "Au démarrage, GraphDataProvider choisit la source "
+    "(config Data:Source ou env RESTITUTION_DATA_SOURCE) :",
+    (1, "auto (défaut) : sonde .\\SQLEXPRESS01 / RestitutionGraphe (timeout 3 s). "
+        "Joignable -> SQL. Sinon -> graphe généré."),
+    (1, "sql : force SQL.   generated : force le graphe généré."),
+    "Graphe généré (GeneratedGraphData) : 5 000 nœuds (réglable), 2 à 6 arêtes "
+    "chacun, transformations aléatoires, GRAINE FIXE -> le même graphe partout.",
+    "En mode généré : pré-calculs § 11.4 / § 11.5 désactivés (inutiles sur un "
+    "petit graphe). Tout le reste identique.",
+], y=Inches(1.7), size=14)
+footnote(s, "Le mode généré est une démonstration, pas les vraies données.")
+
+# =======================================================================
 # 12. FICHIERS CLÉS
 # =======================================================================
 s = new_slide("Fichiers clés", "Le cœur PathFinder")
 table(s, [
     ("Groupe", "Fichiers"),
     ("Mise en mémoire des données",
-     "LineVisEdgRepository.cs (StreamAllDirectedEdges) · DirectedGraph.cs (Build → CSR) · "
-     "InMemoryGraphService.cs (+ GraphPreloader)"),
+     "GraphDataProvider.cs (choix SQL / généré) · LineVisEdgRepository.cs (StreamAllDirectedEdges) · "
+     "GeneratedGraphData.cs · DirectedGraph.cs (Build → CSR) · InMemoryGraphService.cs (EnsureLoaded, GraphPreloader)"),
     ("PathFinder (.cs)",
      "DirectedGraph.cs (BFS bi, Dijkstra, Dijkstra bi, A*/ALT) · InMemoryGraphService.cs (passe-plats) · "
-     "HomeController.cs (aiguillage + cache) · PathViewModel.cs · LineVisEdgRepository.cs (BFS SQL de repli, DescribePath)"),
+     "HomeController.cs (aiguillage + cache) · PathViewModel.cs · GraphDataProvider.cs (DescribePath)"),
     ("Front minimal (HTML rendu serveur)",
      "Views/Home/Index.cshtml (formulaire + résultat) · Views/Shared/_Layout.cshtml · wwwroot/css/site.css"),
 ], y=Inches(1.8), col_widths=[2.4, 8], font=11)

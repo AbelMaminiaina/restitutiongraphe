@@ -1,16 +1,14 @@
 // § 11.7 — le graphe orienté chargé en mémoire au démarrage.
 //
 // Une fois chargé, les quatre algorithmes de plus court chemin tournent
-// entièrement en RAM (voir DirectedGraph) : plus aucun aller-retour SQL par
-// palier. Latence divisée par un à deux ordres de grandeur.
-//
-// Ce service ne contient AUCUNE requête SQL : les arêtes viennent du
-// repository (LineVisEdgRepository.StreamAllDirectedEdges).
+// entièrement en RAM (voir DirectedGraph). Les arêtes viennent de
+// GraphDataProvider (SQL Server ou graphe généré — l'un ou l'autre selon le
+// poste, voir GraphDataProvider). Ce service ne contient AUCUNE requête SQL.
 //
 // C# 8.0 : pas de `record` (GraphStatus est une classe), pas d'async — le
-// préchargement se fait sur un Thread d'arrière-plan, pas via Task.Run.
-// GraphPreloader retourne Task.CompletedTask uniquement parce que l'interface
-// IHostedService l'impose : ce n'est ni `async` ni `await`.
+// préchargement se fait sur un Thread d'arrière-plan. EnsureLoaded() construit
+// le graphe de façon synchrone (sous verrou) si une requête arrive avant que
+// le Thread ait fini.
 
 using System;
 using System.Diagnostics;
@@ -33,9 +31,11 @@ namespace PathFinder.ScanMvc.Services
         public long ApproximateBytes { get; }
         public int LandmarkCount { get; }
         public long LandmarkMs { get; }
+        public string SourceDescription { get; }
 
         public GraphStatus(DateTime loadedAtUtc, int nodeCount, int edgeCount,
-            long durationMs, long approximateBytes, int landmarkCount, long landmarkMs)
+            long durationMs, long approximateBytes, int landmarkCount, long landmarkMs,
+            string sourceDescription)
         {
             LoadedAtUtc = loadedAtUtc;
             NodeCount = nodeCount;
@@ -44,32 +44,50 @@ namespace PathFinder.ScanMvc.Services
             ApproximateBytes = approximateBytes;
             LandmarkCount = landmarkCount;
             LandmarkMs = landmarkMs;
+            SourceDescription = sourceDescription;
         }
     }
 
     public class InMemoryGraphService
     {
-        private readonly LineVisEdgRepository _edges;
+        private readonly GraphDataProvider _data;
         private readonly ILogger<InMemoryGraphService> _logger;
+        private readonly object _loadLock = new object();
 
         private volatile DirectedGraph? _graph;
         private volatile GraphStatus? _status;
 
-        public InMemoryGraphService(LineVisEdgRepository edges, ILogger<InMemoryGraphService> logger)
+        public InMemoryGraphService(GraphDataProvider data, ILogger<InMemoryGraphService> logger)
         {
-            _edges = edges;
+            _data = data;
             _logger = logger;
         }
 
         public bool IsLoaded => _graph != null;
         public GraphStatus? Status => _status;
 
+        // Renvoie le graphe, en le construisant maintenant (sous verrou) s'il
+        // n'est pas encore prêt. Appelé par HomeController avant chaque
+        // recherche : le préchargement en tâche de fond n'est qu'une
+        // optimisation, ceci garantit qu'une recherche marche toujours.
+        public DirectedGraph EnsureLoaded()
+        {
+            var g = _graph;
+            if (g != null) return g;
+
+            lock (_loadLock)
+            {
+                if (_graph == null) Reload();
+                return _graph!;
+            }
+        }
+
         // (Re)charge le graphe complet en mémoire. Appelé au démarrage
-        // (GraphPreloader) et par POST /Scan/ReloadGraph.
+        // (GraphPreloader), par EnsureLoaded(), et par POST /Scan/ReloadGraph.
         public GraphStatus Reload()
         {
             var sw = Stopwatch.StartNew();
-            var graph = DirectedGraph.Build(_edges.StreamAllDirectedEdges());
+            var graph = DirectedGraph.Build(_data.StreamAllDirectedEdges());
             sw.Stop();
 
             // Repères ALT pour A* : quelques BFS complets, une seule fois.
@@ -84,23 +102,26 @@ namespace PathFinder.ScanMvc.Services
                 sw.ElapsedMilliseconds,
                 graph.ApproximateBytes,
                 graph.LandmarkCount,
-                swLm.ElapsedMilliseconds);
+                swLm.ElapsedMilliseconds,
+                _data.Description);
 
             _graph = graph;
             _status = status;
 
             _logger.LogInformation(
                 "Graphe en mémoire chargé : {Nodes:N0} nœuds, {Edges:N0} arêtes, {Ms} ms, ~{Mb:N0} Mo "
-                + "(+ {Lm} repères A* en {LmMs} ms)",
+                + "(+ {Lm} repères A* en {LmMs} ms) — source : {Source}",
                 status.NodeCount, status.EdgeCount, status.DurationMs,
-                status.ApproximateBytes / (1024 * 1024), status.LandmarkCount, status.LandmarkMs);
+                status.ApproximateBytes / (1024 * 1024), status.LandmarkCount, status.LandmarkMs,
+                status.SourceDescription);
 
             return status;
         }
 
-        // Renvoie le résultat en mémoire, ou null si le graphe n'est pas (encore)
-        // chargé : l'appelant retombe alors sur le BFS SQL. Une méthode par
-        // algorithme — toutes donnent le même chemin (poids uniformes), seul le
+        // Une méthode par algorithme. Le graphe est garanti chargé (l'appelant
+        // fait EnsureLoaded()), donc ces méthodes ne renvoient jamais null en
+        // pratique — le `?` couvre seulement le cas théorique « pas encore
+        // chargé ». Toutes donnent le même chemin (poids uniformes), seul le
         // temps d'exécution diffère.
         public ShortestPathResult? ShortestPath(string source, string target, int maxDepth)
             => _graph?.ShortestPath(source, target, maxDepth);
@@ -116,11 +137,8 @@ namespace PathFinder.ScanMvc.Services
     }
 
     // Charge le graphe en arrière-plan au démarrage de l'application : le
-    // serveur accepte les requêtes tout de suite, et les premières recherches
-    // utilisent le BFS SQL jusqu'à ce que le graphe soit prêt.
-    //
-    // Pas de Task.Run : on lance un Thread dédié (IsBackground = true pour ne
-    // pas empêcher l'arrêt du processus).
+    // serveur accepte les requêtes tout de suite. Pas de Task.Run : un Thread
+    // dédié (IsBackground = true pour ne pas empêcher l'arrêt du processus).
     public class GraphPreloader : IHostedService
     {
         private readonly InMemoryGraphService _graph;
@@ -147,12 +165,12 @@ namespace PathFinder.ScanMvc.Services
         {
             try
             {
-                _graph.Reload();
+                _graph.EnsureLoaded();
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
-                    "Chargement du graphe en mémoire échoué — la recherche utilisera le BFS SQL");
+                    "Préchargement du graphe échoué — il sera construit à la première recherche");
             }
         }
 

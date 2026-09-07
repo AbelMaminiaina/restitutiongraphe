@@ -15,6 +15,9 @@ namespace PathFinder.ScanMvc.Models
         // "dijkstra-bi" ou "astar". Réaffiché pour garder l'option sélectionnée.
         public string Algo { get; set; } = "bfs";
 
+        // Phrase « Source : … » (SQL Server ou graphe généré), affichée en tête.
+        public string SourceDescription { get; set; } = "";
+
         // true dès qu'une recherche a été lancée (source ET cible fournies).
         // Sert à la vue pour décider d'afficher ou non un bloc de résultat.
         public bool Searched { get; set; }

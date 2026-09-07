@@ -17,7 +17,9 @@
 //      SccId(u) dans le graphe condensé (ou SccId(u) == SccId(v)).
 //
 // Ce service ne contient AUCUNE requête SQL : les arêtes viennent de
-// LineVisEdgRepository, la persistance et les lectures de SccRepository.
+// GraphDataProvider, la persistance et les lectures de SccRepository. N'a de
+// sens qu'en mode SQL (grand graphe) — en mode graphe généré, ScanController
+// ne l'appelle pas.
 //
 // C# 8.0 : SccStatus est une classe (pas un `record`).
 
@@ -62,7 +64,7 @@ namespace PathFinder.ScanMvc.Services
 
     public class SccCondensationService
     {
-        private readonly LineVisEdgRepository _edges;
+        private readonly GraphDataProvider _data;
         private readonly SccRepository _scc;
 
         private volatile SccStatus? _last;
@@ -71,9 +73,9 @@ namespace PathFinder.ScanMvc.Services
         // Cache du graphe condensé (petit). Rechargé à chaque condensation.
         private volatile Dictionary<int, List<int>>? _condensed;
 
-        public SccCondensationService(LineVisEdgRepository edges, SccRepository scc)
+        public SccCondensationService(GraphDataProvider data, SccRepository scc)
         {
-            _edges = edges;
+            _data = data;
             _scc = scc;
         }
 
@@ -99,7 +101,7 @@ namespace PathFinder.ScanMvc.Services
                 return i;
             }
 
-            foreach (var (from, to) in _edges.StreamAllDirectedEdges())
+            foreach (var (from, to) in _data.StreamAllDirectedEdges())
                 edgeList.Add((IndexOf(from), IndexOf(to)));
 
             var n = names.Count;

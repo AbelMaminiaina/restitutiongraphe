@@ -14,11 +14,10 @@
 // La connexité faible est une condition NÉCESSAIRE d'existence d'un chemin :
 // le scan donne donc un « non » certain, jamais un faux « non ».
 //
-// CE SERVICE NE CONTIENT AUCUNE REQUÊTE SQL. Toutes les requêtes sont dans
-// les repositories :
-//   - LineVisEdgRepository.StreamAllEdges()      : lecture des arêtes ;
-//   - NodeComponentRepository.ReplaceAll(...)     : écriture de NODE_COMPONENT ;
-//   - NodeComponentRepository.GetComponentIds(...): lecture des composantes.
+// CE SERVICE NE CONTIENT AUCUNE REQUÊTE SQL. Les arêtes viennent de
+// GraphDataProvider ; la persistance (dbo.NODE_COMPONENT) de
+// NodeComponentRepository. N'a de sens qu'en mode SQL (grand graphe) — en
+// mode graphe généré, ScanController ne l'appelle pas.
 //
 // C# 8.0 : ScanStatus est une classe (pas un `record`).
 
@@ -63,7 +62,7 @@ namespace PathFinder.ScanMvc.Services
 
     public class GraphScanService
     {
-        private readonly LineVisEdgRepository _edges;
+        private readonly GraphDataProvider _data;
         private readonly NodeComponentRepository _components;
 
         // volatile : le statut est écrit par l'action Run (un thread) et lu par
@@ -71,9 +70,9 @@ namespace PathFinder.ScanMvc.Services
         private volatile ScanStatus? _last;
         public ScanStatus? Last => _last;
 
-        public GraphScanService(LineVisEdgRepository edges, NodeComponentRepository components)
+        public GraphScanService(GraphDataProvider data, NodeComponentRepository components)
         {
-            _edges = edges;
+            _data = data;
             _components = components;
         }
 
@@ -91,7 +90,7 @@ namespace PathFinder.ScanMvc.Services
             //    soit son sens, sont dans la même composante faible.
             var uf = new UnionFind();
             long edgeCount = 0;
-            foreach (var (from, to) in _edges.StreamAllEdges())
+            foreach (var (from, to) in _data.StreamAllEdges())
             {
                 uf.Union(from, to);
                 edgeCount++;

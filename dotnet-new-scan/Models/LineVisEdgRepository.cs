@@ -14,21 +14,24 @@
 // balayage complet au lieu d'une recherche d'index). Chaque SqlParameter est
 // donc typé explicitement en SqlDbType.VarChar (voir AddVarChar).
 //
-// C# 8.0 : pas de `record` — ShortestPathResult et PathEdge sont des classes
-// classiques (constructeur + propriétés en lecture seule).
+// Ce repository NE FAIT PLUS de parcours : le plus court chemin se calcule
+// entièrement en mémoire (Services/DirectedGraph.cs). Il ne reste ici que la
+// LECTURE des arêtes (en flux) et la relecture des Transformation, plus une
+// sonde de connexion (CanConnect) utilisée par GraphDataProvider.
+//
+// C# 8.0 : pas de `record` — ShortestPathResult et PathEdge sont des classes.
 
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Linq;
 
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
 namespace PathFinder.ScanMvc.Models
 {
-    // Résultat brut du BFS : la liste ordonnée des nœuds (source -> ... -> cible)
-    // et un drapeau « trouvé ».
+    // Résultat d'un parcours : la liste ordonnée des nœuds (source -> ... ->
+    // cible) et un drapeau « trouvé ». Produit par Services/DirectedGraph.
     public sealed class ShortestPathResult
     {
         public List<string> Path { get; }
@@ -41,8 +44,8 @@ namespace PathFinder.ScanMvc.Models
         }
     }
 
-    // Une arête du chemin trouvé, enrichie de sa transformation (peut être null si
-    // la ligne n'en porte pas). Utilisé pour le tableau détaillé de la vue.
+    // Une arête du chemin trouvé, enrichie de sa transformation (peut être null
+    // si l'arête n'en porte pas). Utilisé pour le tableau détaillé de la vue.
     public sealed class PathEdge
     {
         public int Index { get; }
@@ -61,29 +64,54 @@ namespace PathFinder.ScanMvc.Models
 
     public class LineVisEdgRepository
     {
-        private const int ParamBatch = 1000;   // SQL Server plafonne à ~2100 paramètres par requête
         private const int NodeColumnSize = 8000; // doit correspondre au type de Nodes/NodesLie
 
+        private readonly string _server;
+        private readonly string _database;
         private readonly string _connectionString;
 
         public LineVisEdgRepository(IConfiguration configuration)
         {
-            var server = Environment.GetEnvironmentVariable("RESTITUTION_DB_SERVER")
+            _server = Environment.GetEnvironmentVariable("RESTITUTION_DB_SERVER")
                 ?? configuration["Database:Server"]
                 ?? @"localhost\SQLEXPRESS01";
-            var database = Environment.GetEnvironmentVariable("RESTITUTION_DB_NAME")
+            _database = Environment.GetEnvironmentVariable("RESTITUTION_DB_NAME")
                 ?? configuration["Database:Name"]
                 ?? "RestitutionGraphe";
 
             _connectionString =
-                $"Server={server};Database={database};Trusted_Connection=True;TrustServerCertificate=True;";
+                $"Server={_server};Database={_database};Trusted_Connection=True;TrustServerCertificate=True;";
         }
+
+        public string ConnectionSummary => $"{_server} / {_database}";
 
         private SqlConnection OpenConnection()
         {
             var conn = new SqlConnection(_connectionString);
             conn.Open();
             return conn;
+        }
+
+        // Sonde rapide : la base est-elle joignable ET la table LINE_VIS_EDG
+        // présente et non vide ? Timeout court (3 s) pour ne pas retarder le
+        // démarrage quand SQL Server est absent. Toute exception => false.
+        public bool CanConnect()
+        {
+            try
+            {
+                var probe = new SqlConnectionStringBuilder(_connectionString) { ConnectTimeout = 3 };
+                using var conn = new SqlConnection(probe.ConnectionString);
+                conn.Open();
+                using var cmd = new SqlCommand("SELECT TOP 1 1 FROM dbo.LINE_VIS_EDG", conn)
+                {
+                    CommandTimeout = 3,
+                };
+                return cmd.ExecuteScalar() != null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         // Ajoute un paramètre typé VARCHAR (et non NVARCHAR) : indispensable pour
@@ -95,218 +123,14 @@ namespace PathFinder.ScanMvc.Models
             return p;
         }
 
-        private static IEnumerable<List<string>> Chunks(List<string> items, int size)
-        {
-            for (var i = 0; i < items.Count; i += size)
-                yield return items.GetRange(i, Math.Min(size, items.Count - i));
-        }
-
         // Dérive (source, cible) d'une ligne LINE_VIS_EDG selon sa Direction.
         private static (string Source, string Target) ToEdge(string nodes, string direction, string nodesLie)
             => direction == "predecesseur" ? (nodes, nodesLie) : (nodesLie, nodes);
 
-        // ----- existence d'un nœud ---------------------------------------------
-
-        private static bool RowExists(SqlConnection conn, string nodeId)
-        {
-            using (var cmd = new SqlCommand("SELECT TOP 1 1 FROM dbo.LINE_VIS_EDG WHERE Nodes = @id", conn))
-            {
-                AddVarChar(cmd, "@id", nodeId);
-                if (cmd.ExecuteScalar() != null) return true;
-            }
-            using (var cmd = new SqlCommand("SELECT TOP 1 1 FROM dbo.LINE_VIS_EDG WHERE NodesLie = @id", conn))
-            {
-                AddVarChar(cmd, "@id", nodeId);
-                return cmd.ExecuteScalar() != null;
-            }
-        }
-
-        // ----- récupération des arêtes, par lots de paramètres -----------------
-
-        // Arêtes sortantes des nœuds de `frontier` (sens respecté). Une arête sort
-        // d'un nœud X soit via (Nodes = X, predecesseur) -> X -> NodesLie, soit via
-        // (NodesLie = X, successeur) -> X -> Nodes. Deux requêtes séparées (une par
-        // index composite) plutôt qu'un OR, pour garder des recherches d'index.
-        private static List<(string Nodes, string Direction, string NodesLie)> FetchEdgesFrom(
-            SqlConnection conn, List<string> frontier)
-        {
-            var rows = new List<(string, string, string)>();
-
-            foreach (var chunk in Chunks(frontier, ParamBatch))
-            {
-                var names = chunk.Select((_, i) => $"@n{i}").ToList();
-                var inClause = string.Join(",", names);
-
-                using (var cmd = new SqlCommand(
-                    "SELECT Nodes, Direction, NodesLie FROM dbo.LINE_VIS_EDG " +
-                    $"WHERE Nodes IN ({inClause}) AND Direction = 'predecesseur'", conn))
-                {
-                    for (var i = 0; i < chunk.Count; i++) AddVarChar(cmd, names[i], chunk[i]);
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                        rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-                }
-
-                using (var cmd = new SqlCommand(
-                    "SELECT Nodes, Direction, NodesLie FROM dbo.LINE_VIS_EDG " +
-                    $"WHERE NodesLie IN ({inClause}) AND Direction = 'successeur'", conn))
-                {
-                    for (var i = 0; i < chunk.Count; i++) AddVarChar(cmd, names[i], chunk[i]);
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                        rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-                }
-            }
-
-            return rows;
-        }
-
-        // Arêtes entrantes des nœuds de `frontier` (miroir de FetchEdgesFrom, sens
-        // inversé) : une arête entre dans X soit via (NodesLie = X, predecesseur)
-        // -> Nodes -> X, soit via (Nodes = X, successeur) -> NodesLie -> X.
-        private static List<(string Nodes, string Direction, string NodesLie)> FetchEdgesInto(
-            SqlConnection conn, List<string> frontier)
-        {
-            var rows = new List<(string, string, string)>();
-
-            foreach (var chunk in Chunks(frontier, ParamBatch))
-            {
-                var names = chunk.Select((_, i) => $"@n{i}").ToList();
-                var inClause = string.Join(",", names);
-
-                using (var cmd = new SqlCommand(
-                    "SELECT Nodes, Direction, NodesLie FROM dbo.LINE_VIS_EDG " +
-                    $"WHERE NodesLie IN ({inClause}) AND Direction = 'predecesseur'", conn))
-                {
-                    for (var i = 0; i < chunk.Count; i++) AddVarChar(cmd, names[i], chunk[i]);
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                        rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-                }
-
-                using (var cmd = new SqlCommand(
-                    "SELECT Nodes, Direction, NodesLie FROM dbo.LINE_VIS_EDG " +
-                    $"WHERE Nodes IN ({inClause}) AND Direction = 'successeur'", conn))
-                {
-                    for (var i = 0; i < chunk.Count; i++) AddVarChar(cmd, names[i], chunk[i]);
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                        rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
-                }
-            }
-
-            return rows;
-        }
-
-        // ----- BFS bidirectionnel --------------------------------------------
-
-        // BFS bidirectionnel non pondéré, sens des arêtes respecté, exécuté par
-        // paliers en SQL. Un front avance depuis la source (arêtes sortantes),
-        // l'autre depuis la cible (arêtes entrantes), en alternance à chaque
-        // palier. Dès qu'un nœud est découvert des deux côtés, on a trouvé le
-        // plus court chemin. Pour un chemin de longueur R, ça ne coûte
-        // qu'environ 2 * degré^(R/2) nœuds visités au lieu de degré^R pour un
-        // BFS à sens unique.
-        public ShortestPathResult ShortestPath(string sourceId, string targetId, int maxDepth = 12)
-        {
-            using var conn = OpenConnection();
-
-            if (!RowExists(conn, sourceId) || !RowExists(conn, targetId))
-                return new ShortestPathResult(new List<string>(), false);
-
-            if (sourceId == targetId)
-                return new ShortestPathResult(new List<string> { sourceId }, true);
-
-            const int maxVisitedPerSide = 30_000; // garde-fou, par sens
-
-            // forwardPrev[X] = nœud précédent de X sur le chemin depuis la source.
-            // backwardNext[X] = nœud suivant de X sur le chemin vers la cible.
-            var forwardPrev = new Dictionary<string, string?> { [sourceId] = null };
-            var backwardNext = new Dictionary<string, string?> { [targetId] = null };
-            var forwardFrontier = new List<string> { sourceId };
-            var backwardFrontier = new List<string> { targetId };
-
-            for (var step = 0; step < maxDepth; step++)
-            {
-                if (forwardFrontier.Count == 0 && backwardFrontier.Count == 0) break;
-
-                var expandForward = step % 2 == 0;
-
-                if (expandForward && forwardFrontier.Count > 0 && forwardPrev.Count < maxVisitedPerSide)
-                {
-                    var rows = FetchEdgesFrom(conn, forwardFrontier);
-                    var next = new List<string>();
-
-                    foreach (var (nodes, direction, nodesLie) in rows)
-                    {
-                        var (source, target) = ToEdge(nodes, direction, nodesLie);
-                        if (!forwardPrev.ContainsKey(source)) continue; // ligne du lot qui ne part pas de la frontière
-                        if (forwardPrev.ContainsKey(target)) continue;
-
-                        forwardPrev[target] = source;
-                        next.Add(target);
-
-                        if (backwardNext.ContainsKey(target))
-                            return BuildBidirectionalPath(target, forwardPrev, backwardNext);
-                    }
-
-                    forwardFrontier = next;
-                }
-                else if (!expandForward && backwardFrontier.Count > 0 && backwardNext.Count < maxVisitedPerSide)
-                {
-                    var rows = FetchEdgesInto(conn, backwardFrontier);
-                    var next = new List<string>();
-
-                    foreach (var (nodes, direction, nodesLie) in rows)
-                    {
-                        var (source, target) = ToEdge(nodes, direction, nodesLie);
-                        if (!backwardNext.ContainsKey(target)) continue; // ligne du lot qui n'arrive pas dans la frontière
-                        if (backwardNext.ContainsKey(source)) continue;
-
-                        backwardNext[source] = target;
-                        next.Add(source);
-
-                        if (forwardPrev.ContainsKey(source))
-                            return BuildBidirectionalPath(source, forwardPrev, backwardNext);
-                    }
-
-                    backwardFrontier = next;
-                }
-                // sinon : ce front est déjà vide ou plafonné pour ce palier, on
-                // retente l'autre sens au palier suivant.
-            }
-
-            return new ShortestPathResult(new List<string>(), false);
-        }
-
-        private static ShortestPathResult BuildBidirectionalPath(
-            string meetingNode, Dictionary<string, string?> forwardPrev, Dictionary<string, string?> backwardNext)
-        {
-            var path = new List<string> { meetingNode };
-
-            var cur = forwardPrev[meetingNode];
-            while (cur != null)
-            {
-                path.Insert(0, cur);
-                cur = forwardPrev[cur];
-            }
-
-            cur = backwardNext[meetingNode];
-            while (cur != null)
-            {
-                path.Add(cur);
-                cur = backwardNext[cur];
-            }
-
-            return new ShortestPathResult(path, true);
-        }
-
         // ----- détail du chemin trouvé (pour le tableau de la vue) -----------
 
         // Pour chaque arête consécutive du chemin (path[i] -> path[i+1]), relit la
-        // Transformation portée par la ligne LINE_VIS_EDG correspondante. Une arête
-        // u -> v est stockée soit en (Nodes = u, predecesseur, NodesLie = v), soit
-        // en (Nodes = v, successeur, NodesLie = u) ; on essaie les deux formes.
+        // Transformation portée par la ligne LINE_VIS_EDG correspondante.
         public List<PathEdge> DescribePath(IReadOnlyList<string> path)
         {
             var edges = new List<PathEdge>();
@@ -318,6 +142,15 @@ namespace PathFinder.ScanMvc.Models
                     EdgeTransformation(conn, path[i], path[i + 1])));
 
             return edges;
+        }
+
+        // Transformation d'une seule arête from -> to. Une arête u -> v est
+        // stockée soit en (Nodes = u, predecesseur, NodesLie = v), soit en
+        // (Nodes = v, successeur, NodesLie = u) ; on essaie les deux formes.
+        public string? EdgeTransformation(string from, string to)
+        {
+            using var conn = OpenConnection();
+            return EdgeTransformation(conn, from, to);
         }
 
         private static string? EdgeTransformation(SqlConnection conn, string from, string to)
@@ -345,7 +178,7 @@ namespace PathFinder.ScanMvc.Models
             return null;
         }
 
-        // ----- lecture en flux de toutes les arêtes (pour les scans) ---------
+        // ----- lecture en flux de toutes les arêtes -------------------------
 
         // Toutes les arêtes (Nodes, NodesLie), sens NON dérivé. Utilisé par
         // GraphScanService (connexité faible : le sens ne compte pas).

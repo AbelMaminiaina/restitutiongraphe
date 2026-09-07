@@ -4,16 +4,18 @@
 }
 
 <p class="hint">
-    Vérifie s'il existe un chemin orienté entre deux nœuds de la base complète
-    (table <code>LINE_VIS_EDG</code>), et affiche le plus court. Le formulaire
-    est soumis en <code>GET</code> : l'URL du résultat est partageable.
-    Avant le parcours, les <a asp-controller="Scan" asp-action="Index">pré-calculs</a>
-    (composantes faibles § 11.4, condensation SCC § 11.5) tranchent le
-    « aucun chemin » sans parcours. Le menu <em>Algorithme</em> choisit entre
+    <strong>Source :</strong> @Model.SourceDescription
+</p>
+<p class="hint">
+    Vérifie s'il existe un chemin orienté entre deux nœuds, et affiche le plus
+    court. Le formulaire est soumis en <code>GET</code> : l'URL du résultat est
+    partageable. Le menu <em>Algorithme</em> choisit entre
     <strong>BFS bidirectionnel</strong>, <strong>Dijkstra</strong>,
     <strong>Dijkstra bidirectionnel</strong> et <strong>A*</strong> : les arêtes
     ayant toutes le même poids, les quatre renvoient le même chemin — seul le
-    temps de calcul diffère.
+    temps de calcul diffère. En mode SQL, les
+    <a asp-controller="Scan" asp-action="Index">pré-calculs</a> (§ 11.4 / § 11.5)
+    tranchent d'abord le « aucun chemin » sans parcours.
 </p>
 
 @* <form method="get"> : soumission HTML classique, la page se recharge avec

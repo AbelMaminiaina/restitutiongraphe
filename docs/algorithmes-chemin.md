@@ -116,7 +116,12 @@ l'inégalité triangulaire donne une borne inférieure admissible.
 | Fichier | Rôle |
 |---|---|
 | `Services/DirectedGraph.cs` | Les 4 algorithmes + `PrepareLandmarks` + heuristique ALT |
-| `Services/InMemoryGraphService.cs` | Chargement CSR + repères au démarrage, passe-plats |
+| `Services/GraphDataProvider.cs` | Choisit la source du graphe : SQL Server si joignable, sinon graphe généré en mémoire (aucune base requise) |
+| `Services/InMemoryGraphService.cs` | Chargement CSR + repères au démarrage, `EnsureLoaded()`, passe-plats |
 | `Controllers/HomeController.cs` | `?algo=…` → aiguillage, cache par (algo, source, cible) |
 | `Views/Home/Index.cshtml` | Menu déroulant *Algorithme* |
 | `scratchpad/bench/` (hors dépôt) | Banc d'essai chronométrage |
+
+> Les chiffres ci-dessus sont mesurés en **mode SQL** (jeu de démo 100 k nœuds).
+> En **mode graphe généré** (5 000 nœuds, défaut sans base), tous les
+> algorithmes sont sous la milliseconde ; les écarts restent dans le même sens.

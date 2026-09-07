@@ -15,6 +15,7 @@
 // Properties/launchSettings.json)
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -34,9 +35,20 @@ namespace PathFinder.ScanMvc
 
             // Les Models d'accès aux données : une seule instance partagée chacun
             // (ils ne gardent aucun état mutable, juste la chaîne de connexion).
-            builder.Services.AddSingleton<LineVisEdgRepository>();       // dbo.LINE_VIS_EDG
-            builder.Services.AddSingleton<NodeComponentRepository>();    // dbo.NODE_COMPONENT (§ 11.4)
-            builder.Services.AddSingleton<SccRepository>();              // dbo.NODE_SCC + dbo.SCC_EDGE (§ 11.5)
+            builder.Services.AddSingleton<LineVisEdgRepository>();       // dbo.LINE_VIS_EDG (mode SQL)
+            builder.Services.AddSingleton<NodeComponentRepository>();    // dbo.NODE_COMPONENT (§ 11.4, mode SQL)
+            builder.Services.AddSingleton<SccRepository>();              // dbo.NODE_SCC + dbo.SCC_EDGE (§ 11.5, mode SQL)
+
+            // Graphe de démonstration généré en mémoire (repli quand SQL Server
+            // est absent — aucune base, aucun script à créer). Taille réglable
+            // par la clé de configuration Data:GeneratedNodes (défaut 5 000).
+            var generatedNodes = builder.Configuration.GetValue("Data:GeneratedNodes", 5000);
+            builder.Services.AddSingleton(new GeneratedGraphData(generatedNodes));
+
+            // Décide, au démarrage, d'où viennent les données : SQL Server si
+            // joignable, sinon le graphe généré (config Data:Source =
+            // auto | sql | generated).
+            builder.Services.AddSingleton<GraphDataProvider>();
 
             // Constructeur d'images SVG pour la galerie « Types de graphes » (sans état).
             builder.Services.AddSingleton<SvgGraphRenderer>();

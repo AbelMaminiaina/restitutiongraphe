@@ -6,6 +6,12 @@ namespace PathFinder.ScanMvc.Models
 {
     public class ScanPageViewModel
     {
+        // Phrase « Source : … » (SQL Server ou graphe généré).
+        public string SourceDescription { get; set; } = "";
+
+        // true en mode SQL : les pré-calculs § 11.4 / § 11.5 sont utilisables.
+        public bool ScanAvailable { get; set; }
+
         // § 11.4 — composantes connexes faibles (GraphScanService).
         public ScanStatus? Weak { get; set; }
 
