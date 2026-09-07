@@ -110,9 +110,17 @@ const EXEMPLE_ROWS = [
    Les nœuds du graphe sont donc toutes les concaténations dta_* et edg_*,
    les arêtes sont les couples (données, edg) orientés selon edg_dir.
 
+   Cas particulier : une ligne où UN SEUL côté est rempli (par ex. seulement
+   dta_1..dta_4, sans edg_* ni edg_dir) décrit un nœud ISOLÉ : il apparaît
+   dans le graphe mais n'a aucune arête.
+
    En-têtes reconnus de façon tolérante : dta_1..dta_4 / edg_1..edg_4
    (avec ou sans « _ », « edg4 » accepté) ; colonne de sens = tout
    en-tête contenant « dir » (edg_dir, edr_dir, direction…).
+
+   La colonne de sens (edg_dir) est OPTIONNELLE : si elle manque, ou si
+   elle est vide sur une ligne où dta et edg sont tous deux remplis, on ne
+   crée pas d'arête pour cette ligne (les deux nœuds restent dans le graphe).
 ------------------------------------------------------------------ */
 function rowsToGraph(rows) {
   // Point d'arrêt : inspecter `rows` (le tableau brut lu depuis Excel).
@@ -153,9 +161,10 @@ function rowsToGraph(rows) {
         "(en-têtes lus : " + header.join(", ") + ")."
     );
   }
-  if (dirCol === -1) {
-    throw new Error("Colonne de sens introuvable : un en-tête doit contenir « dir » (ex. edg_dir).");
-  }
+  // La colonne de sens (edg_dir) est OPTIONNELLE. Si elle est absente
+  // (dirCol reste -1), ou vide sur une ligne donnée, on ne pourra pas
+  // orienter l'arête de cette ligne : on enregistrera alors les deux nœuds
+  // SANS créer d'arête entre eux (voir la boucle plus bas).
 
   // Point d'arrêt : vérifier le repérage des colonnes (dtaCol, edgCol, dirCol).
   brk("rowsToGraph — colonnes repérées. Regarde: header, dtaCol, edgCol, dirCol");
@@ -192,13 +201,28 @@ function rowsToGraph(rows) {
     // Les deux nœuds décrits par cette ligne.
     const dtaNode = joinParts(row, dtaCol); // ex. "DA4.DA3.DA2.DA1"
     const edgNode = joinParts(row, edgCol); // ex. "EA4.EA3.EA2.EA1"
-    if (!dtaNode || !edgNode) {
-      // un des deux côtés est vide : on prévient dans la console et on passe.
-      console.warn(`Ligne ${r + 1} ignorée : nœud « données » ou « edg » vide.`);
+
+    if (!dtaNode && !edgNode) {
+      // les DEUX côtés sont vides : rien à faire, on prévient et on passe.
+      console.warn(`Ligne ${r + 1} ignorée : nœud « données » ET « edg » vides.`);
       continue;
     }
 
-    // Le sens : on lit la colonne dir en majuscules, on ne regarde que la 1re lettre.
+    // On enregistre le type de chaque nœud présent (il peut n'y en avoir qu'un).
+    if (dtaNode) noteKind(dtaNode, "dta");
+    if (edgNode) noteKind(edgNode, "edg");
+
+    // Un seul côté rempli (ex. une ligne avec dta_1..dta_4 mais pas de edg_*
+    // ni de edg_dir) : c'est un nœud ISOLÉ. On le garde dans la liste des
+    // nœuds, mais il n'y a AUCUNE arête à créer, donc on s'arrête là.
+    if (!dtaNode || !edgNode) {
+      brk(`rowsToGraph — ligne ${r + 1} : nœud isolé « ${dtaNode || edgNode} »`);
+      continue;
+    }
+
+    // À partir d'ici : les deux côtés sont remplis. Il faut un sens pour
+    // orienter l'arête. Le sens : colonne dir en majuscules, 1re lettre seule.
+    // (row[dirCol] vaut undefined si la colonne edg_dir n'existe pas -> "".)
     const dir = String(row[dirCol] == null ? "" : row[dirCol]).trim().toUpperCase();
     let source, target; // les deux bouts de l'arête, dans l'ordre source -> target
     if (dir.startsWith("I")) {
@@ -210,15 +234,19 @@ function rowsToGraph(rows) {
       source = edgNode;
       target = dtaNode;
     } else {
-      throw new Error(`Ligne ${r + 1} : sens « ${row[dirCol]} » non reconnu (attendu I ou O).`);
+      // Sens absent ou non reconnu : on garde les deux nœuds (déjà notés
+      // plus haut) mais on NE crée PAS d'arête. Si une autre ligne les relie,
+      // ils ne seront pas comptés comme isolés (le compteur « isolés » se
+      // base sur le degré réel, arêtes de toutes les lignes confondues).
+      console.warn(
+        `Ligne ${r + 1} : sens « ${row[dirCol] == null ? "" : row[dirCol]} » ` +
+          `absent ou non reconnu (attendu I ou O) -> aucune arête créée pour cette ligne.`
+      );
+      continue;
     }
 
     // Point d'arrêt (une fois par ligne de données) : voir ce qu'on a extrait.
     brk(`rowsToGraph — ligne ${r + 1}. Regarde: dtaNode, edgNode, dir, source, target`);
-
-    // On enregistre les types des deux nœuds.
-    noteKind(dtaNode, "dta");
-    noteKind(edgNode, "edg");
 
     // On ajoute l'arête, sauf si ce couple (source, target) a déjà été rencontré.
     // "\n" comme séparateur de clé : il n'apparaît jamais dans un nom de nœud.
