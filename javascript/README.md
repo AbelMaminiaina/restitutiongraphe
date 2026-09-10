@@ -243,6 +243,144 @@ Le chargement de fichier reste géré avec `FileReader` + callback `onload`.
 > ce sont des **modules ES pour Node.js ≥ 18** (`import { … } from "node:fs"`), qui
 > ne s'exécutent jamais dans le navigateur.
 
+## Développer `app.js` hors ligne
+
+Tout ce qu'il faut est du code **vanilla** exécuté par le navigateur : **aucune
+compilation, aucune vérification, aucun outil obligatoire**. La boucle complète :
+
+```
+1. Ouvrir  javascript/app.js  dans un éditeur (VS Code, ou même le Bloc-notes)
+2. Modifier, puis  Ctrl+S
+3. Aller dans le navigateur,  Ctrl+R  (recharger index.html)
+4. Regarder le résultat + la console F12 pour les erreurs  →  retour à l'étape 2
+```
+
+Il n'y a **rien d'autre** : pas de `npm run`, pas de `tsc`, pas de `build`.
+`build.mjs` ne sert **qu'à** fabriquer `dist/` pour la distribution, jamais pour
+développer.
+
+### Pourquoi ça marche sans compilation
+
+| | `app.js` (navigateur) | Comparaison : `dotnet-new-scan` (.NET) |
+| --- | --- | --- |
+| Étape avant exécution | **aucune** | `dotnet build` |
+| « Lancer » le code | recharger l'onglet (`Ctrl+R`) | `dotnet run` |
+| Vérification des types | aucune (JS n'a pas de types) | le compilateur refuse le code invalide |
+
+Pour qui vient de Python : c'est comme éditer un `.py` puis relancer
+`python script.py`… sauf qu'ici on ne tape même pas de commande, on **recharge
+la page**.
+
+### Servir la page en local (Python, déjà installé)
+
+Le double-clic sur `index.html` (`file://`) **fonctionne** pour ce projet (les
+`vendor/*.js` sont en chemins relatifs, le `.xlsx` est lu par `FileReader`, pas
+par `fetch`). Un petit serveur local est toutefois plus propre :
+
+```powershell
+cd chemin\vers\restitutiondonnees\javascript
+python -m http.server 8000
+```
+
+Puis ouvrir <http://localhost:8000>. `Ctrl+C` pour arrêter. Avantage : pas de
+cache `file://` capricieux, et l'onglet **Network** du F12 montre bien les `200`
+/ `404` des `vendor/*.js`.
+
+> Si le navigateur ressert un vieux `app.js` : **`Ctrl+Shift+R`** (rechargement
+> forcé), ou F12 → **Network** → cocher **« Disable cache »**.
+
+### Sans vérification : où sont signalées les erreurs
+
+Rien ne contrôle le code **avant** son exécution, donc :
+
+- faute de frappe (parenthèse non fermée…) → **erreur rouge dans la console F12**
+  avec le numéro de ligne (`app.js:123`, cliquable) ;
+- erreur de logique (mauvais nom de variable) → `undefined` silencieux ou
+  `Cannot read properties of null`, là aussi dans la console.
+
+Filets de sécurité **optionnels** (aucun n'est requis) :
+
+- coloration syntaxique de VS Code (accolades/parenthèses non équilibrées) ;
+- **F12 → Console** : le vrai vérificateur, en direct ;
+- **Prettier** et **ESLint** installés en local (voir ci-dessous) si on veut un
+  contrôle automatique — mais le code tourne très bien sans.
+
+### Qualité du code hors ligne (Prettier + ESLint)
+
+À télécharger **une seule fois** avec une connexion, puis utilisables hors ligne :
+
+```powershell
+cd chemin\vers\restitutiondonnees\javascript
+npm install --save-dev prettier eslint      # connexion nécessaire cette fois uniquement
+```
+
+Ensuite, hors ligne :
+
+```powershell
+npx prettier --write app.js                  # reformate proprement
+npx eslint app.js                            # == au lieu de ===, variables inutilisées…
+```
+
+Ou les extensions VS Code **Prettier** et **ESLint** (installées une fois en
+ligne) : formatage à la sauvegarde, erreurs soulignées en direct.
+
+### Ce qui exige (une fois) une connexion
+
+| Étape | Hors ligne ? |
+| --- | --- |
+| Éditer `app.js`, servir avec `python -m http.server`, déboguer au F12 | ✅ toujours |
+| Librairies `vendor/*.js` | ✅ déjà téléchargées |
+| **1re** install de Prettier / ESLint / extensions VS Code | ❌ une fois |
+| **1er** `node build.mjs` (télécharge `terser`) | ❌ une fois |
+| Tout le reste ensuite | ✅ hors ligne |
+
+## Aide de l'IA pour écrire `app.js`
+
+### En ligne
+
+| Outil | Note |
+| --- | --- |
+| **Claude Code** (CLI) | Écrit et modifie `app.js` directement, lance le serveur, teste, corrige. |
+| **GitHub Copilot** (extension VS Code) | Autocomplétion + chat ; abonnement (gratuit étudiants / OSS). |
+| **Continue** (extension VS Code) | Gratuit, open source ; se branche sur Claude / GPT **ou sur un modèle local** (voir ci-dessous). |
+| **Codeium / Windsurf**, **Cursor** | Paliers gratuits ; assistants intégrés à l'éditeur. |
+| **Chat web** (<https://claude.ai>, <https://chatgpt.com>) | Coller `app.js` **et** ce README, poser la question, recopier. |
+
+### 100 % hors ligne — Ollama
+
+`ollama` est installé sur le poste mais **aucun modèle n'est encore
+téléchargé**. Une fois, avec une connexion :
+
+```powershell
+ollama pull qwen2.5-coder:7b       # ~4,7 Go, spécialisé code
+```
+
+Ensuite, totalement hors ligne :
+
+- **ligne de commande** : `ollama run qwen2.5-coder:7b` ;
+- **dans VS Code** : extension **Continue** configurée sur `qwen2.5-coder` via
+  Ollama → autocomplétion + chat sans internet.
+
+> Un modèle local est moins fort que Claude, mais suffit pour du vanilla ES2015
+> simple.
+
+### ⚠️ Toujours donner les règles à l'IA
+
+Sans contexte, n'importe quelle IA propose du React, du TypeScript, des
+`import`, du `?.`… ce qui **casse** ce projet. Lui coller :
+
+```
+Contraintes pour app.js :
+- JavaScript vanilla, <script> classique : PAS de module, PAS d'import/export.
+- ES2015 (ES6) maximum : interdit ?. , ?? , async/await, class,
+  Array.includes / .at() / .flat() , Object.entries / fromEntries.
+- Aucun framework, aucun build, aucune nouvelle dépendance
+  (seules cytoscape, dagre, cytoscape-dagre, xlsx sont disponibles, en local).
+- Commentaires en FRANÇAIS, généreux (niveau débutant).
+- Respecter le modèle de données : nœuds dta_* / edg_*, colonne edg_dir (I/O),
+  et l'API cytoscape « collections + classes ».
+```
+
 ## Développer `app.js` en ligne (sans rien installer)
 
 `app.js` est du **vanilla** : pas de build, juste `index.html` + `app.js` +
