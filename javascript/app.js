@@ -323,7 +323,11 @@ let currentData = null;   // dernier graphe analysé { nodes, edges }
    La clé correspond à la <option> du <select> dans index.html.
 ------------------------------------------------------------------ */
 const LAYOUT_CONFIGS = {
+  // rankDir : sens de la hiérarchie. "TB" = Top->Bottom (de haut en bas),
+  //           "LR" = Left->Right (de gauche à droite, comme un arbre couché).
+  // nodeSep : espace entre deux nœuds d'un même niveau ; rankSep : espace entre niveaux.
   dagre: { name: "dagre", rankDir: "TB", nodeSep: 45, rankSep: 90, animate: true },
+  dagreLR: { name: "dagre", rankDir: "LR", nodeSep: 45, rankSep: 90, animate: true },
   breadthfirst: { name: "breadthfirst", directed: true, spacingFactor: 1.3, animate: true },
   circle: { name: "circle", animate: true },
   concentric: {
