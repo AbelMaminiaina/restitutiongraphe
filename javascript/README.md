@@ -206,3 +206,98 @@ lisibles ; les parties denses sont commentées **ligne par ligne** :
 - [Cytoscape.js](https://js.cytoscape.org/) `3.30.2` — rendu et interaction du graphe
 - [dagre](https://github.com/dagrejs/dagre) `0.8.5` + [cytoscape-dagre](https://github.com/cytoscape/cytoscape.js-dagre) `2.5.0` — disposition hiérarchique orientée
 - [SheetJS / xlsx](https://sheetjs.com/) `0.18.5` (build `xlsx.mini.min.js`) — lecture des fichiers `.xlsx`
+
+## Inspiration et version du code
+
+`app.js` n'est **ni un fork ni l'adaptation d'un projet existant** : c'est du code
+écrit pour ce dépôt, construit petit à petit (voir `git log -- javascript/app.js`).
+Il n'a donc **pas de numéro de version** — le seul historique est celui de git.
+
+Ses tournures sont reprises de trois sources classiques :
+
+| Partie de `app.js` | Source de la façon de faire |
+| --- | --- |
+| `renderGraph` : objet `{ elements, style: [...sélecteurs], layout }`, `cy.$id()`, `node.outgoers()` / `.incomers()`, `addClass` / `removeClass`, `cy.on("tap", …)` | Documentation officielle **Cytoscape.js** (js.cytoscape.org) — style des tutoriels « collections + classes » |
+| `workbookBufferToGraph` : `XLSX.read(…, { type: "array" })` puis `sheet_to_json(ws, { header: 1 })` | Documentation **SheetJS** (pattern canonique de lecture d'une feuille) |
+| `LAYOUT_CONFIGS` (`rankDir`, `nodeSep`, `rankSep`…) | Options documentées de **cytoscape-dagre** |
+| `detectCycle` : DFS à 3 couleurs blanc / gris / noir | Algorithme de manuel (CLRS *Introduction to Algorithms*, articles « tri topologique » / « détection de cycle ») |
+| `countWeakComponents` : BFS avec file pour compter les composantes | Idem, algorithme de manuel |
+
+### Version de JavaScript
+
+`app.js` est un **script classique** (`<script src="app.js">`, pas `type="module"`)
+**exécuté tel quel par le navigateur** : `build.mjs` ne fait que le *minifier*, il
+ne le transpile pas. Aucun `import` / `export`, pas de `"use strict"`.
+
+Le plafond des fonctionnalités employées est **ES2015 (ES6)**, rien au-dessus :
+`const` / `let`, fonctions fléchées, littéraux gabarits, `Map` / `Set`, `for…of`,
+spread dans les tableaux, déstructuration de paramètres, paramètres par défaut,
+`String.prototype.includes`.
+
+Volontairement **non utilisés** (pour rester lisible et compatible partout) :
+`async` / `await`, chaînage optionnel `?.`, coalescence `??`, `class`,
+`Array.prototype.includes` / `.at()` / `.flat()`, `Object.entries` / `fromEntries`.
+Le chargement de fichier reste géré avec `FileReader` + callback `onload`.
+
+> À ne pas confondre avec les fichiers `*.mjs` (`build.mjs`, `generer-exemple.mjs`…) :
+> ce sont des **modules ES pour Node.js ≥ 18** (`import { … } from "node:fs"`), qui
+> ne s'exécutent jamais dans le navigateur.
+
+## Développer `app.js` en ligne (sans rien installer)
+
+`app.js` est du **vanilla** : pas de build, juste `index.html` + `app.js` +
+`vendor/`. L'outil en ligne adapté est donc un **bac à sable qui sert des
+fichiers statiques** (il reproduit ce que fait un double-clic sur `index.html`).
+
+### Recommandé : StackBlitz — <https://stackblitz.com>
+
+Pourquoi c'est le meilleur choix ici :
+
+- il lance un vrai serveur statique dans le navigateur, comme en local ;
+- on peut **glisser-déposer tout le dossier `javascript/`** (avec `vendor/`) ;
+- aperçu en direct : dès qu'on sauve `app.js`, la page se recharge ;
+- le **glisser-déposer d'un `.xlsx`** dans la page marche (indispensable pour
+  tester `loadFile`) ;
+- console et onglet réseau intégrés, comme le `F12` local.
+
+Étapes :
+
+1. Aller sur <https://stackblitz.com>, cliquer **« Create »** → template
+   **« Static »** (HTML/CSS/JS).
+2. Dans l'arborescence de gauche, supprimer les fichiers d'exemple, puis
+   **glisser-déposer** le dossier `javascript/` (au minimum `index.html`,
+   `app.js`, `style.css`, `vendor/`).
+3. L'aperçu de droite affiche la page. Cliquer **« Charger l'exemple »** pour
+   vérifier.
+4. Modifier `app.js` : la page se recharge toute seule.
+
+### Alternative projet complet : CodeSandbox — <https://codesandbox.io>
+
+Même principe (template **« Static »** / **« Vanilla »**), interface façon
+VS Code, partage par lien. Un peu plus lourd que StackBlitz, mais pratique pour
+garder un projet dans le temps.
+
+### Pour tester juste un bout de code (un layout, un style cytoscape)
+
+Si on veut seulement essayer **une idée sur cytoscape** sans tout le projet :
+
+| Outil | Lien | Note |
+| --- | --- | --- |
+| **CodePen** | <https://codepen.io> | Le plus rapide. Menu ⚙️ du panneau JS → **« Add External Scripts »** → coller les 4 URL jsDelivr (cytoscape, dagre, cytoscape-dagre, xlsx) |
+| **JSFiddle** | <https://jsfiddle.net> | Idem, section **« Resources »** à gauche pour les librairies |
+
+> Sur CodePen / JSFiddle, le **glisser-déposer d'un fichier `.xlsx`** est peu
+> pratique : les garder pour la partie graphe, pas pour tester la lecture Excel.
+
+### Outils qualité (en complément)
+
+| Outil | Lien | Usage |
+| --- | --- | --- |
+| **Prettier Playground** | <https://prettier.io/playground> | Coller `app.js` → code reformaté proprement |
+| **ESLint Demo** | <https://eslint.org/play> | Repère les erreurs vanilla (`==` au lieu de `===`, variable non utilisée…) |
+| **Can I use** | <https://caniuse.com> | Vérifier qu'une fonctionnalité JS (ex. `Array.prototype.at`) est bien supportée avant de l'ajouter, puisque le code n'est pas transpilé |
+
+> En local, l'équivalent de tous ces bacs à sable est l'extension **Live Server**
+> de VS Code (voir la section « Déboguer » → « VS Code »). Les outils en ligne
+> servent surtout à **partager un test par lien** ou à **bricoler sans rien
+> installer**.
