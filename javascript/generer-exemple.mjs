@@ -31,27 +31,30 @@ const XLSX = require(join(HERE, "vendor", "xlsx.mini.min.js"));
    Le jeu contient un cycle :
      DC -> EA -> DA -> EB -> DE -> ED -> DG -> EF -> DC
 ------------------------------------------------------------------ */
+/* Le 4e élément de chaque enregistrement est txn_dta : la TRANSFORMATION
+   appliquée sur cette arête (édg <-> données). C'est une simple étiquette
+   texte, propre à la ligne, qui n'influence pas la forme du graphe. */
 const RECORDS = [
-  ["DA", "O", "EA"],
-  ["DB", "I", "EA"],
-  ["DC", "I", "EA"],
-  ["DA", "I", "EB"],
-  ["DD", "O", "EB"],
-  ["DE", "O", "EB"],
-  ["DD", "I", "EC"],
-  ["DF", "O", "EC"],
-  ["DE", "I", "ED"],
-  ["DG", "O", "ED"],
-  ["DF", "I", "EE"],
-  ["DH", "O", "EE"],
-  ["DG", "I", "EF"],
-  ["DH", "I", "EF"],
-  ["DC", "O", "EF"],
-  ["DB", "O", "EC"],
-  ["DA", "I", "EE"],
-  ["DH", "O", "EA"],
-  ["DF", "I", "EB"],
-  ["DG", "I", "EA"],
+  ["DA", "O", "EA", "agrégation"],
+  ["DB", "I", "EA", "filtre"],
+  ["DC", "I", "EA", "jointure"],
+  ["DA", "I", "EB", "tri"],
+  ["DD", "O", "EB", "calcul"],
+  ["DE", "O", "EB", "arrondi"],
+  ["DD", "I", "EC", "normalisation"],
+  ["DF", "O", "EC", "concaténation"],
+  ["DE", "I", "ED", "déduplication"],
+  ["DG", "O", "ED", "conversion"],
+  ["DF", "I", "EE", "filtre"],
+  ["DH", "O", "EE", "agrégation"],
+  ["DG", "I", "EF", "jointure"],
+  ["DH", "I", "EF", "tri"],
+  ["DC", "O", "EF", "calcul"],
+  ["DB", "O", "EC", "arrondi"],
+  ["DA", "I", "EE", "normalisation"],
+  ["DH", "O", "EA", "concaténation"],
+  ["DF", "I", "EB", "déduplication"],
+  ["DG", "I", "EA", "conversion"],
 ];
 
 /* ------------------------------------------------------------------
@@ -62,11 +65,11 @@ const RECORDS = [
    affichée sera « DA4.DA3.DA2.DA1 » (même logique que E11..E14 dans
    l'exemple d'origine).
 ------------------------------------------------------------------ */
-const HEADER = ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4"];
+const HEADER = ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"];
 
 const parts = (nom) => [1, 2, 3, 4].map((i) => `${nom}${i}`); // "DA" -> ["DA1","DA2","DA3","DA4"]
 
-const dataRows = RECORDS.map(([dta, dir, edg]) => [...parts(dta), dir, ...parts(edg)]);
+const dataRows = RECORDS.map(([dta, dir, edg, txn]) => [...parts(dta), dir, ...parts(edg), txn]);
 const rows = [HEADER, ...dataRows];
 
 /* ------------------------------------------------------------------

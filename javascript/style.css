@@ -377,6 +377,47 @@ code {
   font-size: 0.8rem;
 }
 
+.sel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  table-layout: fixed;
+}
+
+.sel-table th {
+  text-align: left;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sel-table td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  overflow-wrap: break-word;
+}
+
+.sel-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sel-table-txn {
+  color: var(--text-muted);
+}
+
+.sel-table .chip {
+  display: inline-block;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+}
+
 /* ---------- Statistiques ---------- */
 
 .stats {

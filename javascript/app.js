@@ -71,27 +71,27 @@ function brk(label) {
    1re sous-liste = en-têtes, puis une sous-liste par ligne de données.
 ------------------------------------------------------------------ */
 const EXEMPLE_ROWS = [
-  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4"],
-  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4"],
-  ["DB1", "DB2", "DB3", "DB4", "I", "EA1", "EA2", "EA3", "EA4"],
-  ["DC1", "DC2", "DC3", "DC4", "I", "EA1", "EA2", "EA3", "EA4"],
-  ["DA1", "DA2", "DA3", "DA4", "I", "EB1", "EB2", "EB3", "EB4"],
-  ["DD1", "DD2", "DD3", "DD4", "O", "EB1", "EB2", "EB3", "EB4"],
-  ["DE1", "DE2", "DE3", "DE4", "O", "EB1", "EB2", "EB3", "EB4"],
-  ["DD1", "DD2", "DD3", "DD4", "I", "EC1", "EC2", "EC3", "EC4"],
-  ["DF1", "DF2", "DF3", "DF4", "O", "EC1", "EC2", "EC3", "EC4"],
-  ["DE1", "DE2", "DE3", "DE4", "I", "ED1", "ED2", "ED3", "ED4"],
-  ["DG1", "DG2", "DG3", "DG4", "O", "ED1", "ED2", "ED3", "ED4"],
-  ["DF1", "DF2", "DF3", "DF4", "I", "EE1", "EE2", "EE3", "EE4"],
-  ["DH1", "DH2", "DH3", "DH4", "O", "EE1", "EE2", "EE3", "EE4"],
-  ["DG1", "DG2", "DG3", "DG4", "I", "EF1", "EF2", "EF3", "EF4"],
-  ["DH1", "DH2", "DH3", "DH4", "I", "EF1", "EF2", "EF3", "EF4"],
-  ["DC1", "DC2", "DC3", "DC4", "O", "EF1", "EF2", "EF3", "EF4"],
-  ["DB1", "DB2", "DB3", "DB4", "O", "EC1", "EC2", "EC3", "EC4"],
-  ["DA1", "DA2", "DA3", "DA4", "I", "EE1", "EE2", "EE3", "EE4"],
-  ["DH1", "DH2", "DH3", "DH4", "O", "EA1", "EA2", "EA3", "EA4"],
-  ["DF1", "DF2", "DF3", "DF4", "I", "EB1", "EB2", "EB3", "EB4"],
-  ["DG1", "DG2", "DG3", "DG4", "I", "EA1", "EA2", "EA3", "EA4"],
+  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"],
+  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4", "agrégation"],
+  ["DB1", "DB2", "DB3", "DB4", "I", "EA1", "EA2", "EA3", "EA4", "filtre"],
+  ["DC1", "DC2", "DC3", "DC4", "I", "EA1", "EA2", "EA3", "EA4", "jointure"],
+  ["DA1", "DA2", "DA3", "DA4", "I", "EB1", "EB2", "EB3", "EB4", "tri"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "EB1", "EB2", "EB3", "EB4", "calcul"],
+  ["DE1", "DE2", "DE3", "DE4", "O", "EB1", "EB2", "EB3", "EB4", "arrondi"],
+  ["DD1", "DD2", "DD3", "DD4", "I", "EC1", "EC2", "EC3", "EC4", "normalisation"],
+  ["DF1", "DF2", "DF3", "DF4", "O", "EC1", "EC2", "EC3", "EC4", "concaténation"],
+  ["DE1", "DE2", "DE3", "DE4", "I", "ED1", "ED2", "ED3", "ED4", "déduplication"],
+  ["DG1", "DG2", "DG3", "DG4", "O", "ED1", "ED2", "ED3", "ED4", "conversion"],
+  ["DF1", "DF2", "DF3", "DF4", "I", "EE1", "EE2", "EE3", "EE4", "filtre"],
+  ["DH1", "DH2", "DH3", "DH4", "O", "EE1", "EE2", "EE3", "EE4", "agrégation"],
+  ["DG1", "DG2", "DG3", "DG4", "I", "EF1", "EF2", "EF3", "EF4", "jointure"],
+  ["DH1", "DH2", "DH3", "DH4", "I", "EF1", "EF2", "EF3", "EF4", "tri"],
+  ["DC1", "DC2", "DC3", "DC4", "O", "EF1", "EF2", "EF3", "EF4", "calcul"],
+  ["DB1", "DB2", "DB3", "DB4", "O", "EC1", "EC2", "EC3", "EC4", "arrondi"],
+  ["DA1", "DA2", "DA3", "DA4", "I", "EE1", "EE2", "EE3", "EE4", "normalisation"],
+  ["DH1", "DH2", "DH3", "DH4", "O", "EA1", "EA2", "EA3", "EA4", "concaténation"],
+  ["DF1", "DF2", "DF3", "DF4", "I", "EB1", "EB2", "EB3", "EB4", "déduplication"],
+  ["DG1", "DG2", "DG3", "DG4", "I", "EA1", "EA2", "EA3", "EA4", "conversion"],
 ];
 
 /* ------------------------------------------------------------------
@@ -116,11 +116,16 @@ const EXEMPLE_ROWS = [
 
    En-têtes reconnus de façon tolérante : dta_1..dta_4 / edg_1..edg_4
    (avec ou sans « _ », « edg4 » accepté) ; colonne de sens = tout
-   en-tête contenant « dir » (edg_dir, edr_dir, direction…).
+   en-tête contenant « dir » (edg_dir, edr_dir, direction…) ; colonne de
+   transformation = tout en-tête contenant « txn » (txn_dta…).
 
    La colonne de sens (edg_dir) est OPTIONNELLE : si elle manque, ou si
    elle est vide sur une ligne où dta et edg sont tous deux remplis, on ne
    crée pas d'arête pour cette ligne (les deux nœuds restent dans le graphe).
+
+   La colonne txn_dta est OPTIONNELLE elle aussi : c'est la TRANSFORMATION
+   appliquée sur l'arête (données <-> edg) décrite par la ligne. Si elle est
+   absente ou vide, la transformation de l'arête reste une chaîne vide "".
 ------------------------------------------------------------------ */
 function rowsToGraph(rows) {
   // Point d'arrêt : inspecter `rows` (le tableau brut lu depuis Excel).
@@ -143,6 +148,7 @@ function rowsToGraph(rows) {
   const dtaCol = {};
   const edgCol = {};
   let dirCol = -1;
+  let txnCol = -1;
 
   header.forEach((name, idx) => {
     // idx = position de la colonne (0, 1, 2...). name = l'en-tête normalisé.
@@ -153,6 +159,8 @@ function rowsToGraph(rows) {
     else if ((m = name.match(/^edg[ _-]?0*([1-4])$/))) edgCol[m[1]] = idx;
     // Colonne de sens : n'importe quel en-tête qui contient "dir" (edg_dir, edr_dir...).
     else if (name.includes("dir")) dirCol = idx;
+    // Colonne de transformation : n'importe quel en-tête qui contient "txn" (txn_dta...).
+    else if (name.includes("txn")) txnCol = idx;
   });
 
   if (Object.keys(dtaCol).length === 0 || Object.keys(edgCol).length === 0) {
@@ -220,6 +228,10 @@ function rowsToGraph(rows) {
       continue;
     }
 
+    // Transformation portée par cette ligne (colonne txn_dta). "" si la
+    // colonne est absente ou vide sur cette ligne.
+    const txn = String(row[txnCol] == null ? "" : row[txnCol]).trim();
+
     // À partir d'ici : les deux côtés sont remplis. Il faut un sens pour
     // orienter l'arête. Le sens : colonne dir en majuscules, 1re lettre seule.
     // (row[dirCol] vaut undefined si la colonne edg_dir n'existe pas -> "".)
@@ -253,7 +265,7 @@ function rowsToGraph(rows) {
     const key = source + "\n" + target;
     if (!edgeSet.has(key)) {
       edgeSet.add(key);
-      edges.push({ source, target });
+      edges.push({ source, target, txn });
     }
   }
 
@@ -308,8 +320,8 @@ const selectionDetail = document.getElementById("selection-detail");
 const selIdEl = document.getElementById("sel-id");
 const succCountEl = document.getElementById("succ-count");
 const predCountEl = document.getElementById("pred-count");
-const succChipsEl = document.getElementById("succ-chips");
-const predChipsEl = document.getElementById("pred-chips");
+const succTableBodyEl = document.getElementById("succ-table-body");
+const predTableBodyEl = document.getElementById("pred-table-body");
 
 const statsEl = document.getElementById("stats");
 
@@ -366,6 +378,7 @@ function renderGraph(data) {
         id: `${e.source}=>${e.target}`,
         source: e.source,
         target: e.target,
+        txn: e.txn || "",
       },
     })),
   ];
@@ -498,14 +511,28 @@ function selectNode(id) {
   outgoers.edges().addClass("succ");              // arêtes sortantes en vert
   incomers.edges().addClass("pred");              // arêtes entrantes en jaune
 
-  // 3) panneau latéral : on affiche l'id et les deux listes de voisins
+  // 3) panneau latéral : on affiche l'id et les deux tableaux de voisins
+  //    (voisin + transformation portée par l'arête qui les relie à `id`).
   selectionHint.hidden = true;
   selectionDetail.hidden = false;
   selIdEl.textContent = id;
 
-  // .map((n) => n.id()) : collection de nœuds -> liste de noms ; .sort() : ordre alpha
-  fillChips(succChipsEl, succCountEl, successors.map((n) => n.id()).sort());
-  fillChips(predChipsEl, predCountEl, predecessors.map((n) => n.id()).sort());
+  // outgoers.edges() : les arêtes id -> successeur. Pour chacune, .target()
+  // donne le nœud successeur et .data("txn") la transformation de la ligne
+  // Excel qui a créé cette arête.
+  const succRows = outgoers
+    .edges()
+    .map((e) => ({ id: e.target().id(), txn: e.data("txn") || "" }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  // incomers.edges() : les arêtes prédécesseur -> id. .source() donne le
+  // nœud prédécesseur.
+  const predRows = incomers
+    .edges()
+    .map((e) => ({ id: e.source().id(), txn: e.data("txn") || "" }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  fillTable(succTableBodyEl, succCountEl, succRows);
+  fillTable(predTableBodyEl, predCountEl, predRows);
 }
 
 function clearSelection() {
@@ -514,20 +541,28 @@ function clearSelection() {
   selectionDetail.hidden = true;
 }
 
-/* Remplit une liste de "chips" cliquables (chaque chip = un nœud voisin). */
-function fillChips(container, countEl, ids) {
-  countEl.textContent = ids.length;
-  container.innerHTML = "";
+/* Remplit un tableau <tbody> de voisins cliquables : 1re colonne = id du
+   voisin (successeur ou prédécesseur), 2e colonne = transformation (txn_dta)
+   portée par l'arête qui le relie au nœud sélectionné. */
+function fillTable(tbody, countEl, rows) {
+  countEl.textContent = rows.length;
+  tbody.innerHTML = "";
 
-  if (ids.length === 0) {
-    const span = document.createElement("span");
-    span.className = "chip-empty";
-    span.textContent = "aucun";
-    container.appendChild(span);
+  if (rows.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 2;
+    td.className = "chip-empty";
+    td.textContent = "aucun";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
     return;
   }
 
-  ids.forEach((id) => {
+  rows.forEach(({ id, txn }) => {
+    const tr = document.createElement("tr");
+
+    const tdId = document.createElement("td");
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "chip";
@@ -537,7 +572,15 @@ function fillChips(container, countEl, ids) {
       selectNode(id);
       cy.animate({ center: { eles: cy.$id(id) }, duration: 250 });
     });
-    container.appendChild(btn);
+    tdId.appendChild(btn);
+
+    const tdTxn = document.createElement("td");
+    tdTxn.className = "sel-table-txn";
+    tdTxn.textContent = txn || "—";
+
+    tr.appendChild(tdId);
+    tr.appendChild(tdTxn);
+    tbody.appendChild(tr);
   });
 }
 

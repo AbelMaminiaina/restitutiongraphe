@@ -23,7 +23,7 @@
         <span class="brand-dot"></span>
         <div>
           <h1>Graphe orienté non pondéré</h1>
-          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> (colonnes <code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>)</p>
+          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> (colonnes <code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>, <code>txn_dta</code>)</p>
         </div>
       </div>
 
@@ -95,11 +95,17 @@
             <p class="sel-title" id="sel-id"></p>
             <div class="sel-block">
               <span class="sel-label">Successeurs <b id="succ-count">0</b></span>
-              <div class="chips" id="succ-chips"></div>
+              <table class="sel-table">
+                <thead><tr><th>Successeur</th><th>Transformation</th></tr></thead>
+                <tbody id="succ-table-body"></tbody>
+              </table>
             </div>
             <div class="sel-block">
               <span class="sel-label">Prédécesseurs <b id="pred-count">0</b></span>
-              <div class="chips" id="pred-chips"></div>
+              <table class="sel-table">
+                <thead><tr><th>Prédécesseur</th><th>Transformation</th></tr></thead>
+                <tbody id="pred-table-body"></tbody>
+              </table>
             </div>
           </div>
         </section>

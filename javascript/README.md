@@ -18,7 +18,7 @@ Double-cliquez sur **`index.html`** (ou ouvrez-le dans un navigateur).
 | --- | --- |
 | Charger un fichier | Bouton **« Importer un .xlsx »** ou **glisser-déposer** le fichier sur la zone centrale |
 | Voir la démo | Bouton **« Charger l'exemple »** (données de `exemple.xlsx` intégrées au code) |
-| Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (vert) et *prédécesseurs* (jaune) sont mis en évidence |
+| Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (vert) et *prédécesseurs* (jaune) sont mis en évidence, avec leur **transformation** (`txn_dta`) dans deux tableaux du panneau latéral |
 | Changer la disposition | Menu **« Mise en page »** (hiérarchique, cercle, forces…) |
 | Exporter | Bouton **« Exporter PNG »** |
 
@@ -28,10 +28,10 @@ Les nœuds `edg_*` sont en **bleu**, les nœuds « données » `dta_*` en **viol
 
 Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
 
-| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 |
-| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 |
+| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` | `txn_dta` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 | agrégation |
+| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 | filtre |
 
 Chaque ligne définit **deux nœuds** et **une arête** entre eux :
 
@@ -42,17 +42,24 @@ Chaque ligne définit **deux nœuds** et **une arête** entre eux :
     ⇒ arête `données → edg` ;
   - **`O`** (Output) → le nœud « données » est **successeur** du nœud « edg »
     ⇒ arête `edg → données`.
+- la colonne **`txn_dta`** donne la **transformation** appliquée sur cette arête
+  (une simple étiquette texte) ; elle est affichée dans les tableaux
+  successeurs/prédécesseurs du panneau latéral quand un nœud est sélectionné.
 
 Donc : les **nœuds** du graphe sont toutes les concaténations `dta_*` et `edg_*`,
-les **arêtes** sont les couples (données, edg) orientés selon `edg_dir`.
+les **arêtes** sont les couples (données, edg) orientés selon `edg_dir`, chacune
+portant sa transformation `txn_dta`.
 
 Tolérances de lecture :
 
 - en-têtes insensibles à la casse ; `edg4` accepté comme `edg_4` ; la colonne de
   sens est repérée par n'importe quel en-tête contenant `dir` (`edr_dir`,
-  `direction`…) ;
+  `direction`…) ; la colonne de transformation par n'importe quel en-tête
+  contenant `txn` ;
 - morceaux `dta_*` / `edg_*` vides ignorés dans la concaténation ;
-- ligne dont le nœud « données » ou « edg » est entièrement vide : ignorée.
+- ligne dont le nœud « données » ou « edg » est entièrement vide : ignorée ;
+- colonne `txn_dta` optionnelle : absente ou vide → transformation affichée
+  comme « — ».
 
 ## Partager à des utilisateurs (sans leur donner le code source)
 
