@@ -1,51 +1,57 @@
 -- =============================================================================
---  Procédure dbo.LINE_VIS_NodesListV2
+--  Procedure dbo.LINE_VIS_NodesList
 --  Base : RestitutionGrapheProd
 --
---  Transcrite des captures IMG_5669 / IMG_5670, puis optimisée.
---  Adaptations vs captures :
---    - table  dbo.LINE_VIS_EDG_2  -> dbo.LINE_VIS_EDG
---    - suppression du hint INDEX = [IX_LINE_VIS_EDG_2_DTA_EDG_DIR] : il forçait
---      le plus gros index (645 Mo) et un opérateur Sort de plusieurs secondes.
---      Sans hint, l'optimiseur prend IX_LINE_VIS_EDG_2_Covering, dont l'ordre
---      (DTA_1..4, LIN_UID, LNA_UID, EDG_DIR) couvre PARTITION BY + ORDER BY du
---      ROW_NUMBER -> plus aucun tri.
---    - suppression de COLLATE French_CI_AS : la base est déjà en
---      SQL_Latin1_General_CP1_CI_AS (insensible à la casse) ; la clause forçait
---      un CONVERT ligne par ligne sur des colonnes larges (DTA_3). Le LIKE
---      reste insensible à la casse via la collation de la colonne.
+--  Code transcrit des photos M1/3.jpeg et M1/4.jpeg (fichier LINE_VIS_NodesList.sql).
+--  Ajouts : l'en-tete USE ci-dessous + le ROW_NUMBER + le retrait du
+--  COLLATE du Cas 1 + Cas 1 limite aux 1000 premieres lignes trouvees
+--  (voir plus bas).
 --
---  Renvoie, pour chaque combinaison distincte (DTA_1..DTA_4), la 1re ligne
---  (LIN_UID/LNA_UID/EDG_DIR mini), limitée à @p_maxres, plus le nombre total
---  de combinaisons distinctes correspondantes (@TotalLignes).
+--  A noter :
+--    - ecart volontaire avec la photo : le code de la photo filtre le Cas 1
+--      sur "LIKE 'a%'" alors que son commentaire dit "LIKE 'f%'". On suit le
+--      commentaire ('f%') : avec 'a%', aucune ligne ne correspondait et la
+--      table (7 M lignes) etait lue en entier (~10 s) ;
+--    - ecart volontaire avec la photo : sur la photo RowNum vaut la constante
+--      0 (plus de dedoublonnage). On a remis le ROW_NUMBER() + WHERE RowNum = 1
+--      -> une seule ligne par combinaison (DTA_1..DTA_4), la 1re selon
+--      LIN_UID, LNA_UID, EDG_DIR. Le SELECT DISTINCT du Cas 2 devient inutile
+--      (et est retire).
+--    - ecart volontaire (performance) pour le Cas 1 :
+--      "DTA_1 COLLATE French_CI_AS LIKE ..." devient "DTA_1 LIKE ..." :
+--      la colonne est deja insensible a la casse
+--      (SQL_Latin1_General_CP1_CI_AS) et le COLLATE coutait ~3 s de
+--      conversion par parcours des 7 M lignes.
+--    - ecart volontaire (performance, SANS index) pour le Cas 1 :
+--        * on recupere seulement les 1000 premieres lignes trouvees en base
+--          avec DTA_1 LIKE 'f%' (TOP 1000 sans ORDER BY : SQL Server arrete
+--          la lecture de la table des qu'il en a 1000), puis on garde les
+--          100 premieres combinaisons (DTA_1..DTA_4) distinctes de ces 1000
+--          lignes, triees par DTA_1..DTA_4.
+--          Attention : ce sont les 100 premieres PARMI ces 1000 lignes, pas
+--          forcement les 100 premieres de toute la table ; et si moins de
+--          1000 lignes correspondent, la table est lue en entier ;
+--        * le calcul de TotalLignes du Cas 1 est mis en commentaire pour le
+--          moment (COUNT DISTINCT sur 7 M lignes = 2 a 3 min sans index) :
+--          TotalLignes vaut NULL dans le Cas 1.
 --
---  Perf (table de 1,8 M lignes) :
---    Cas 1 (aucun critère)      : ~3 ms   -- @TotalLignes lu dans le cache
---    Cas 2 (>= 1 critère)       : ~2-3 s  -- 1 scan pour le comptage filtré ;
---                                            la requête de données s'arrête tôt
---                                            (row goal FETCH/FAST 100).
---    Le ~2 s résiduel du Cas 2 est le coût incompressible d'une recherche
---    "LIKE '%...%'" sur 1,8 M lignes (non SARGable). Pour du sous-seconde il
---    faudrait un index full-text / trigrammes.
---
---  Dépendance : dbo.LINE_VIS_EDG_Stats + dbo.LINE_VIS_EDG_RefreshStats
---  (LINE_VIS_EDG_Stats.sql). Penser à EXEC dbo.LINE_VIS_EDG_RefreshStats
---  après chaque chargement de données.
+--  Dependances : dbo.LINE_VIS_EDG (LINE_VIS_EDG.sql), aucun index requis.
 -- =============================================================================
 
 USE RestitutionGrapheProd;
 GO
 
-IF OBJECT_ID(N'[dbo].[LINE_VIS_NodesListV2]') IS NOT NULL
-    DROP PROCEDURE [dbo].[LINE_VIS_NodesListV2]
+IF OBJECT_ID(N'[dbo].[LINE_VIS_NodesList]') IS NOT NULL
+DROP PROCEDURE [dbo].LINE_VIS_NodesList
 GO
 
-CREATE PROCEDURE [dbo].[LINE_VIS_NodesListV2]
+CREATE PROCEDURE [dbo].[LINE_VIS_NodesList]
     @p_column   VARCHAR(1000) = NULL,
     @p_table    VARCHAR(1000) = NULL,
-    @p_schema   VARCHAR(8000) = NULL,
+    @p_schema   VARCHAR(8000)  = NULL,
     @p_env      VARCHAR(1000) = NULL,
     @p_maxres   INT           = 100
+
 AS
 BEGIN
     DECLARE @AllParamsEmpty BIT = 0
@@ -61,16 +67,12 @@ BEGIN
     -- Précalcul de TotalLignes
     IF @AllParamsEmpty = 1
     BEGIN
-        -- Cache O(1) alimenté par dbo.LINE_VIS_EDG_RefreshStats : évite un
-        -- COUNT(DISTINCT DTA_1..DTA_4) (~2,4 s de scan sur 1,8 M lignes) à
-        -- chaque appel sans critère.
-        SELECT @TotalLignes = DistinctDTACount
-        FROM dbo.LINE_VIS_EDG_Stats WHERE Id = 1;
-
-        -- Repli si le cache n'a jamais été alimenté : calcul direct (lent).
-        IF @TotalLignes IS NULL
-            SELECT @TotalLignes = COUNT(*)
-            FROM (SELECT DISTINCT DTA_1, DTA_2, DTA_3, DTA_4 FROM dbo.LINE_VIS_EDG) AS AllDistinct;
+        -- Calcul du total mis en commentaire pour le moment (trop lent sans
+        -- index : 2 a 3 min sur 7 M lignes). TotalLignes reste NULL.
+        -- IF @TotalLignes IS NULL
+        --     SELECT @TotalLignes = COUNT(*)
+        --     FROM (SELECT DISTINCT DTA_1, DTA_2, DTA_3, DTA_4 FROM dbo.LINE_VIS_EDG) AS AllDistinct
+        SET @TotalLignes = NULL
     END
     ELSE
         -- Cas 2 : comptage des combinaisons distinctes qui passent les filtres.
@@ -90,15 +92,24 @@ BEGIN
     IF @AllParamsEmpty = 1
     BEGIN
         -- Cas 1 : Tous les paramètres sont vides -> Filtre DTA_1 LIKE 'f%'
-        WITH FilteredData AS (
+        -- 1) les 1000 premieres lignes trouvees en base avec DTA_1 LIKE 'f%'
+        --    (pas d'ORDER BY : la lecture s'arrete des qu'on en a 1000) ;
+        -- 2) dedoublonnage par combinaison (DTA_1..DTA_4) sur ces 1000 lignes ;
+        -- 3) les @p_maxres (100) premieres combinaisons, triees.
+        WITH Premieres1000 AS (
+            SELECT TOP (1000)
+                DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR
+            FROM dbo.LINE_VIS_EDG
+            WHERE DTA_1 LIKE 'f%'
+        ),
+        FilteredData AS (
             SELECT
                 DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR,
                 ROW_NUMBER() OVER (
                     PARTITION BY DTA_1, DTA_2, DTA_3, DTA_4
                     ORDER BY LIN_UID ASC, LNA_UID ASC, EDG_DIR ASC
                 ) AS RowNum
-            FROM dbo.LINE_VIS_EDG
-            WHERE DTA_1 LIKE 'f%'
+            FROM Premieres1000
         )
         SELECT
             DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR, @TotalLignes AS TotalLignes
@@ -106,7 +117,8 @@ BEGIN
         WHERE RowNum = 1
         ORDER BY DTA_1, DTA_2, DTA_3, DTA_4
         OFFSET 0 ROWS FETCH FIRST @p_maxres ROWS ONLY
-        OPTION (RECOMPILE, FAST 100); -- <- Optimise pour les 100 premières lignes
+        OPTION (RECOMPILE)
+
     END
     ELSE
     BEGIN
@@ -133,7 +145,7 @@ BEGIN
         WHERE RowNum = 1
         ORDER BY DTA_1, DTA_2, DTA_3, DTA_4
         OFFSET 0 ROWS FETCH FIRST @p_maxres ROWS ONLY
-        OPTION (RECOMPILE, FAST 100); -- <- Optimise pour les 100 premières lignes
+        OPTION (RECOMPILE, FAST 100) -- <- Optimise pour les 100 premières lignes
     END
 END
 GO

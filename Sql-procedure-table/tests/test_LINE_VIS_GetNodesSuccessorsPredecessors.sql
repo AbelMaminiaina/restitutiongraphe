@@ -1,5 +1,5 @@
 -- =============================================================================
---  Test unitaire : dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+--  Test unitaire : dbo.LINE_VIS_GetNodesSuccessorsPredecessors
 -- =============================================================================
 --  Cible  : base jetable $(TestDb) (defaut : RestitutionGrapheProd_Test)
 --  Lancer : tests/run_tests.sh  (deploie schema + LINE_VIS_HEA + procedure
@@ -78,7 +78,7 @@ DECLARE @res TABLE (
 -------------------------------------------------------------------------------
 PRINT '--- TEST 1 : noeud N1, successeurs (@p_type = O) ---';
 DELETE FROM @res;
-INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'LNA_A', @p_linuid = 'L1', @p_edgdir = 'O', @p_type = 'O';
 
 SET @n = (SELECT COUNT(*) FROM @res);
@@ -108,7 +108,7 @@ ELSE BEGIN SET @fail += 1; PRINT '  FAIL 1.5  jointure LINE_VIS_HEA incorrecte';
 -------------------------------------------------------------------------------
 PRINT '--- TEST 2 : noeud N1, predecesseurs (@p_type = I) ---';
 DELETE FROM @res;
-INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'LNA_A', @p_linuid = 'L1', @p_edgdir = 'O', @p_type = 'I';
 
 SET @n = (SELECT COUNT(*) FROM @res);
@@ -123,7 +123,7 @@ ELSE BEGIN SET @fail += 1; PRINT '  FAIL 2.2  TotalLignes attendu 1, obtenu ' + 
 -------------------------------------------------------------------------------
 PRINT '--- TEST 3 : @p_maxres = 1 sur le noeud N1 (2 successeurs) ---';
 DELETE FROM @res;
-INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'LNA_A', @p_linuid = 'L1', @p_edgdir = 'O', @p_type = 'O', @p_maxres = 1;
 
 SET @n = (SELECT COUNT(*) FROM @res);
@@ -137,7 +137,7 @@ ELSE BEGIN SET @fail += 1; PRINT '  FAIL 3.2  TotalLignes attendu 2, obtenu ' + 
 -------------------------------------------------------------------------------
 PRINT '--- TEST 4 : @p_useEdg = 1 (coordonnees lues sur EDG_1..EDG_4 de R1) ---';
 DELETE FROM @res;
-INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'LNA_A', @p_linuid = 'L1', @p_edgdir = 'O', @p_type = 'O', @p_useEdg = 1;
 
 SET @n = (SELECT COUNT(*) FROM @res);
@@ -148,7 +148,7 @@ ELSE BEGIN SET @fail += 1; PRINT '  FAIL 4.1  attendu 1 ligne R6, obtenu ' + CAS
 -------------------------------------------------------------------------------
 PRINT '--- TEST 5 : noeud inexistant => coordonnees NULL => toutes les aretes O ---';
 DELETE FROM @res;
-INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessorsV2
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'NOPE', @p_linuid = 'NOPE', @p_edgdir = 'O', @p_type = 'O';
 
 -- aretes O ayant un en-tete : R1, R2, R4 (LNA_A), R6 (LNA_B) ; R5 exclu (LNA_C).

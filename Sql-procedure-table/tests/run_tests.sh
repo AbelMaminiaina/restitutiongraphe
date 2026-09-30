@@ -38,8 +38,9 @@ DEPLOY=(
     "LINE_VIS_EDG.sql"
     "LINE_VIS_EDG_Stats.sql"
     "LINE_VIS_HEA.sql"
-    "LINE_VIS_NodesListV2.sql"
-    "LINE_VIS_GetNodesSuccessorsPredecessorsV2.sql"
+    "LINE_VIS_NodesList.sql"
+    "LINE_VIS_NodeById.sql"
+    "LINE_VIS_GetNodesSuccessorsPredecessors.sql"
 )
 
 echo "== Serveur      : $SERVER"

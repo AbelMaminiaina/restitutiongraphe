@@ -2,7 +2,10 @@
 --  Cache d'agrégats pour dbo.LINE_VIS_EDG
 --  Base : RestitutionGrapheProd
 --
---  Objectif : LINE_VIS_NodesListV2 (Cas 1, aucun critère) a besoin du nombre
+--  NB : la version actuelle de LINE_VIS_NodesList (transcrite des photos M1)
+--  ne lit plus ce cache ; il est conservé pour une future optimisation.
+--
+--  Objectif : LINE_VIS_NodesList (Cas 1, aucun critère) a besoin du nombre
 --  de combinaisons (DTA_1..DTA_4) distinctes. Le calculer à chaque appel
 --  (COUNT(DISTINCT) sur 1,8 M lignes) coûte ~2,4 s. Aucun index n'y change
 --  quoi que ce soit (testé : index étroit = idem, columnstore = pire, car
