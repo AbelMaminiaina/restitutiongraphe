@@ -19,7 +19,8 @@
 --    - Cas 1 : seulement les 1000 premieres lignes 'f%' trouvees, puis les
 --      100 premiers groupes distincts ; TotalLignes = NULL (calcul en
 --      commentaire pour le moment) ;
---    - Cas 2 : TotalLignes = nb de groupes (DTA_1..DTA_4) distincts filtres.
+--    - Cas 2 : meme principe (1000 lignes filtrees puis 100 groupes) ;
+--      TotalLignes = nb de groupes (DTA_1..DTA_4) distincts filtres.
 --
 --  Sortie : une ligne PASS / FAIL par assertion ; si au moins une assertion
 --  echoue, le script leve une erreur (THROW) -> code retour sqlcmd != 0.
