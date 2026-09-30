@@ -19,8 +19,10 @@
 --    - Cas 1 : seulement les 1000 premieres lignes 'f%' trouvees, puis les
 --      100 premiers groupes distincts ; TotalLignes = NULL (calcul en
 --      commentaire pour le moment) ;
---    - Cas 2 : meme principe (1000 lignes filtrees puis 100 groupes) ;
---      TotalLignes = nb de groupes (DTA_1..DTA_4) distincts filtres.
+--    - Cas 2 : une seule lecture (au plus 1001 lignes filtrees) puis 100
+--      groupes ; TotalLignes = nb EXACT de groupes distincts si <= 1000
+--      lignes filtrees, sinon 1001 ("plus de 1000") ;
+--    - recherche insensible a la casse ET aux accents (CP1_CI_AI).
 --
 --  Sortie : une ligne PASS / FAIL par assertion ; si au moins une assertion
 --  echoue, le script leve une erreur (THROW) -> code retour sqlcmd != 0.
@@ -177,6 +179,38 @@ SET @ok = CASE WHEN NOT EXISTS (SELECT 1 FROM @res WHERE DTA_1 NOT LIKE 'f%')
           THEN 1 ELSE 0 END;
 IF @ok = 1 PRINT '  PASS 5.2  100 combinaisons distinctes, toutes ''f%''';
 ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.2  lignes non distinctes ou hors filtre ''f%'''; END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 6 : Cas 2 @p_column = ''FALPHA'' (1500 lignes) => total plafonne ---';
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_NodesList @p_column = 'FALPHA';
+
+SET @n = (SELECT COUNT(*) FROM @res);
+IF @n = 100 PRINT '  PASS 6.1  100 lignes renvoyees';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 6.1  attendu 100, obtenu ' + CAST(@n AS VARCHAR); END
+
+SET @t = (SELECT MIN(TotalLignes) FROM @res);
+IF @t = 1001 AND NOT EXISTS (SELECT 1 FROM @res WHERE TotalLignes <> 1001)
+    PRINT '  PASS 6.2  TotalLignes = 1001 (plus de 1000 lignes filtrees)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 6.2  TotalLignes attendu 1001, obtenu ' + ISNULL(CAST(@t AS VARCHAR), 'NULL'); END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 7 : Cas 2 insensible aux accents (''etedata'' trouve ''ETEDATA'' accentue) ---';
+-- CHAR(201) = 'E' accent aigu majuscule en CP1252 (evite les soucis d'encodage du fichier)
+INSERT INTO dbo.LINE_VIS_EDG
+    (LNA_UID, LIN_UID, DTA_1, DTA_2, DTA_3, DTA_4, EDG_DIR,
+     EDG_1, EDG_2, EDG_3, EDG_4, TXN_DTA, PRX_TXN_DTA)
+VALUES ('LNA_E', 'L900', CHAR(201) + 'T' + CHAR(201) + 'DATA', 'ZJ', 'D3E', 'ENV1', 'O',
+        NULL, NULL, NULL, NULL, NULL, NULL);
+
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_NodesList @p_column = 'etedata';
+
+SET @n = (SELECT COUNT(*) FROM @res);
+SET @t = (SELECT MIN(TotalLignes) FROM @res);
+IF @n = 1 AND @t = 1 AND EXISTS (SELECT 1 FROM @res WHERE LIN_UID = 'L900')
+    PRINT '  PASS 7.1  accents et casse ignores (1 ligne L900, TotalLignes = 1)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 7.1  attendu 1 ligne L900, obtenu ' + CAST(@n AS VARCHAR); END
 
 -------------------------------------------------------------------------------
 PRINT '';

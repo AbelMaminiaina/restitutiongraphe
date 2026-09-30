@@ -34,14 +34,24 @@
 --        * le calcul de TotalLignes du Cas 1 est mis en commentaire pour le
 --          moment (COUNT DISTINCT sur 7 M lignes = 2 a 3 min sans index) :
 --          TotalLignes vaut NULL dans le Cas 1.
---    - meme principe pour le Cas 2 (au moins un critere) : les 1000
---      premieres lignes qui passent les filtres, puis les 100 premieres
---      combinaisons distinctes. TotalLignes est calcule (nombre exact de
---      combinaisons distinctes filtrees) : cout ~40-90 s sur 7 M lignes
---      sans index. Le COLLATE French_CI_AS est garde dans le
---      Cas 2 (recherche insensible aux accents).
---      Limite sans index : si le critere trouve moins de 1000 lignes, la
---      table est lue en entier (~10-15 s sur 7 M lignes).
+--    - Cas 2 (au moins un critere) : UNE seule lecture de la table, qui
+--      s'arrete des que 1001 lignes passent les filtres (TOP 1001 sans
+--      ORDER BY). Ces lignes sont gardees dans la table variable @Lues ;
+--      on en tire :
+--        * les 100 premieres combinaisons (DTA_1..DTA_4) distinctes ;
+--        * TotalLignes PLAFONNE :
+--            - <= 1000 lignes filtrees : on a tout lu -> TotalLignes =
+--              nombre EXACT de combinaisons distinctes ;
+--            - 1001 lignes trouvees : il y en a plus de 1000 ->
+--              TotalLignes = 1001, a afficher "plus de 1000" a l'ecran.
+--      (le total exact sur toute la table coutait 20 a 60 s sans index).
+--    - Cas 2 : COLLATE French_CI_AS remplace par SQL_Latin1_General_CP1_CI_AI :
+--        * French_CI_AS est sensible aux accents ("AS" = Accent Sensitive) :
+--          "donnees" ne trouvait pas "Données". CI_AI ignore casse ET accents ;
+--        * collation "SQL" sur du VARCHAR : LIKE ~2,5x moins couteux
+--          (lecture complete des 7 M lignes : 27 s -> 11 s).
+--      Limite sans index : si le critere trouve 1000 lignes ou moins, la
+--      table est lue en entier (~11 s sur 7 M lignes).
 --
 --  Dependances : dbo.LINE_VIS_EDG (LINE_VIS_EDG.sql), aucun index requis.
 -- =============================================================================
@@ -62,8 +72,20 @@ CREATE PROCEDURE [dbo].[LINE_VIS_NodesList]
 
 AS
 BEGIN
+    SET NOCOUNT ON  -- pas de message "(n lignes affectees)" avant le resultat
+
     DECLARE @AllParamsEmpty BIT = 0
     DECLARE @TotalLignes INT
+    -- Cas 2 : lignes filtrees lues une seule fois (au plus 1001)
+    DECLARE @Lues TABLE (
+        DTA_1   VARCHAR(1000),
+        DTA_2   VARCHAR(1000),
+        DTA_3   VARCHAR(8000),
+        DTA_4   VARCHAR(1000),
+        LIN_UID VARCHAR(500),
+        LNA_UID VARCHAR(200),
+        EDG_DIR CHAR(1)
+    )
 
     -- Vérification si tous les paramètres sont NULL ou vides
     IF (@p_column IS NULL OR @p_column = '')
@@ -83,19 +105,28 @@ BEGIN
         SET @TotalLignes = NULL
     END
     ELSE
-        -- Cas 2 : comptage des combinaisons distinctes qui passent les filtres.
-        -- Sans index : lit toute la table et dedoublonne les lignes filtrees.
-        SELECT @TotalLignes = COUNT(*)
-        FROM (
-            SELECT DTA_1, DTA_2, DTA_3, DTA_4
-            FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
-            WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
-            GROUP BY DTA_1, DTA_2, DTA_3, DTA_4
-        ) AS FilteredDistinct
+    BEGIN
+        -- Cas 2 : une seule lecture, arretee des que 1001 lignes passent les
+        -- filtres (la 1001e sert juste a savoir qu'il y en a plus de 1000).
+        INSERT INTO @Lues (DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR)
+        SELECT TOP (1001)
+            DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR
+        FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
+        WHERE
+            (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE SQL_Latin1_General_CP1_CI_AI LIKE '%' + @p_column + '%')
+        AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE SQL_Latin1_General_CP1_CI_AI LIKE '%' + @p_table  + '%')
+        AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE SQL_Latin1_General_CP1_CI_AI LIKE '%' + @p_schema + '%')
+        AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE SQL_Latin1_General_CP1_CI_AI LIKE '%' + @p_env    + '%')
+        OPTION (RECOMPILE)
+
+        -- Total plafonne : exact si on a tout lu (<= 1000 lignes), sinon 1001
+        -- ("plus de 1000").
+        IF (SELECT COUNT(*) FROM @Lues) > 1000
+            SET @TotalLignes = 1001
+        ELSE
+            SELECT @TotalLignes = COUNT(*)
+            FROM (SELECT DISTINCT DTA_1, DTA_2, DTA_3, DTA_4 FROM @Lues) AS FilteredDistinct
+    END
 
     IF @AllParamsEmpty = 1
     BEGIN
@@ -131,28 +162,17 @@ BEGIN
     ELSE
     BEGIN
         -- Cas 2 : Au moins un paramètre est non vide -> Filtres dynamiques.
-        -- 1) les 1000 premieres lignes trouvees qui passent les filtres
-        --    (pas d'ORDER BY : la lecture s'arrete des qu'on en a 1000) ;
-        -- 2) dedoublonnage par combinaison (DTA_1..DTA_4) sur ces 1000 lignes ;
-        -- 3) les @p_maxres (100) premieres combinaisons, triees.
-        WITH Premieres AS (
-            SELECT top(1000)
-                DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR
-            FROM dbo.LINE_VIS_EDG WITH (NOLOCK)
-            WHERE
-                (@p_column IS NULL OR @p_column = '' OR DTA_1 COLLATE French_CI_AS LIKE '%' + @p_column + '%')
-            AND (@p_table  IS NULL OR @p_table  = '' OR DTA_2 COLLATE French_CI_AS LIKE '%' + @p_table  + '%')
-            AND (@p_schema IS NULL OR @p_schema = '' OR DTA_3 COLLATE French_CI_AS LIKE '%' + @p_schema + '%')
-            AND (@p_env    IS NULL OR @p_env    = '' OR DTA_4 COLLATE French_CI_AS LIKE '%' + @p_env    + '%')
-        ),
-        FilteredData AS (
+        -- Les lignes filtrees sont deja dans @Lues (lues une seule fois) :
+        -- 1) dedoublonnage par combinaison (DTA_1..DTA_4) ;
+        -- 2) les @p_maxres (100) premieres combinaisons, triees.
+        WITH FilteredData AS (
             SELECT
                 DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR,
                 ROW_NUMBER() OVER (
                     PARTITION BY DTA_1, DTA_2, DTA_3, DTA_4
                     ORDER BY LIN_UID ASC, LNA_UID ASC, EDG_DIR ASC
                 ) AS RowNum
-            FROM Premieres
+            FROM @Lues
         )
         SELECT
             DTA_1, DTA_2, DTA_3, DTA_4, LIN_UID, LNA_UID, EDG_DIR, @TotalLignes AS TotalLignes
