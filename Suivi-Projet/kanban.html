@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Suivi de projet</title>
+<link rel="stylesheet" href="kanban.css">
+</head>
+<body>
+
+<header>
+  <h1 id="projectTitle" title="Cliquer pour renommer">Mon projet</h1>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Rechercher une tâche…">
+    <button class="primary" id="addBtn">+ Nouvelle tâche</button>
+    <button id="exportBtn">Exporter JSON</button>
+    <button id="importBtn">Importer JSON</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<div class="progress">
+  <div class="bar"><div id="progressBar"></div></div>
+  <span id="progressText">0 %</span>
+</div>
+
+<main class="board" id="board"></main>
+
+<!-- Fenêtre de création / modification d'une tâche -->
+<dialog id="taskDialog">
+  <form method="dialog" id="taskForm">
+    <h2 id="dialogTitle" style="margin:0;font-size:16px">Nouvelle tâche</h2>
+    <label>Titre <input type="text" name="title" required></label>
+    <label>Description <textarea name="description" rows="3"></textarea></label>
+    <div class="row">
+      <label>Priorité
+        <select name="priority">
+          <option value="basse">Basse</option>
+          <option value="moyenne" selected>Moyenne</option>
+          <option value="haute">Haute</option>
+        </select>
+      </label>
+      <label>Étiquette <input type="text" name="label" placeholder="ex. SQL, front…"></label>
+    </div>
+    <div class="row">
+      <label>Échéance <input type="date" name="due"></label>
+      <label>Colonne
+        <select name="column" id="columnSelect"></select>
+      </label>
+    </div>
+    <div class="dlg-actions">
+      <button type="button" class="danger" id="deleteBtn">Supprimer</button>
+      <button type="button" id="cancelBtn">Annuler</button>
+      <button type="submit" class="primary">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="kanban.js"></script>
+</body>
+</html>
