@@ -36,6 +36,7 @@ run_file() { "$SQLCMD" -S "$SERVER" -E -C -b -I -i "$(win "$1")"; }
 # Scripts a deployer AVANT les tests, dans l'ordre (schema puis procedures).
 DEPLOY=(
     "LINE_VIS_EDG.sql"
+    "LINE_VIS_EDG_IndexHash.sql"
     "LINE_VIS_EDG_Stats.sql"
     "LINE_VIS_HEA.sql"
     "LINE_VIS_NodesList.sql"

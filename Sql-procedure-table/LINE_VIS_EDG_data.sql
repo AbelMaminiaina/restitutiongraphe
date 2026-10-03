@@ -16,6 +16,13 @@
 --  secondaire). Durée : quelques minutes sur SQL Server Express.
 -- =============================================================================
 
+-- Obligatoire depuis l'index IX_LINE_VIS_EDG_DIR_HASH (LINE_VIS_EDG_IndexHash.sql) :
+-- sans ces options, l'INSERT echoue ("SET options have incorrect settings").
+-- sqlcmd met QUOTED_IDENTIFIER a OFF par defaut (sauf avec l'option -I).
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 USE RestitutionGrapheProd;
 GO
 

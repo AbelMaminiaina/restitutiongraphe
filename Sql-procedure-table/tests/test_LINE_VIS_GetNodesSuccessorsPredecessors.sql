@@ -20,6 +20,10 @@
 --    R4  LNA_A / L4 / O / c2,t2,s2,e2 / NULL          -> noeud N2, succ.
 --    R5  LNA_C / L5 / O / c1,t1,s1,e1 / NULL          -> LNA_C absent de HEA
 --    R6  LNA_B / L6 / O / n1,n2,n3,n4 / NULL          -> cible de @p_useEdg=1
+--    R7  LNA_A / L7 / O / x1,y1,z1,w1   / NULL          -> noeud N3
+--    R8  LNA_B / L8 / O / X1,Y1,'Z1  ',W1 / NULL        -> = N3 (casse, espaces de fin)
+--    R9  LNA_A / L9 / O / FIADODS3,...  / NULL          -> collision CHECKSUM avec R10
+--    R10 LNA_B / L10/ O / FIADODSOUT,...  / NULL        -> (valeurs reelles de la prod)
 --
 --  Fixture LINE_VIS_HEA : LNA_A et LNA_B seulement (pas LNA_C).
 -- =============================================================================
@@ -46,7 +50,13 @@ VALUES
     ('LNA_B', 'L3', 'c1', 't1', 's1', 'e1', 'I', NULL, NULL, NULL, NULL, NULL, NULL),
     ('LNA_A', 'L4', 'c2', 't2', 's2', 'e2', 'O', NULL, NULL, NULL, NULL, NULL, NULL),
     ('LNA_C', 'L5', 'c1', 't1', 's1', 'e1', 'O', NULL, NULL, NULL, NULL, NULL, NULL),
-    ('LNA_B', 'L6', 'n1', 'n2', 'n3', 'n4', 'O', NULL, NULL, NULL, NULL, NULL, NULL);
+    ('LNA_B', 'L6', 'n1', 'n2', 'n3', 'n4', 'O', NULL, NULL, NULL, NULL, NULL, NULL),
+    ('LNA_A', 'L7', 'x1', 'y1', 'z1', 'w1', 'O', NULL, NULL, NULL, NULL, NULL, NULL),
+    ('LNA_B', 'L8', 'X1', 'Y1', 'Z1  ', 'W1', 'O', NULL, NULL, NULL, NULL, NULL, NULL),
+    -- R9 / R10 : deux noeuds DIFFERENTS avec le meme CHECKSUM (trouves dans
+    -- les 7 M lignes de RestitutionGrapheProd)
+    ('LNA_A', 'L9',  'FIADODS3',   'ZJ', '_EF8DE75F.TRN_VAL_INP.GHI_DAT_LOAD', 'xDI_IBIT_MIG_3_WRK.3.ZJ',       'O', NULL, NULL, NULL, NULL, NULL, NULL),
+    ('LNA_B', 'L10', 'FIADODSOUT', 'ZJ', '_FE6A4D81.SPSS_LS2DC2.DEF_TRN_PROC', 'xDI_IBIC_INSCTR_390_WRK.90.ZJ', 'O', NULL, NULL, NULL, NULL, NULL, NULL);
 
 INSERT INTO dbo.LINE_VIS_HEA
     (LNA_UID, RON_APP, PCK_PGM_NME, EXE_PGM_NME, VRS_EXE_PGM, APP_ENV,
@@ -151,20 +161,68 @@ DELETE FROM @res;
 INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
     @p_lnauid = 'NOPE', @p_linuid = 'NOPE', @p_edgdir = 'O', @p_type = 'O';
 
--- aretes O ayant un en-tete : R1, R2, R4 (LNA_A), R6 (LNA_B) ; R5 exclu (LNA_C).
+-- aretes O ayant un en-tete : R1, R2, R4, R6, R7, R8, R9, R10 ; R5 exclu (LNA_C).
 SET @n = (SELECT COUNT(*) FROM @res);
-IF @n = 4 PRINT '  PASS 5.1  4 lignes (R1,R2,R4,R6 ; R5 exclu faute d''en-tete)';
-ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.1  attendu 4, obtenu ' + CAST(@n AS VARCHAR); END
+IF @n = 8 PRINT '  PASS 5.1  8 lignes (toutes les aretes O sauf R5, exclu faute d''en-tete)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.1  attendu 8, obtenu ' + CAST(@n AS VARCHAR); END
 
 SET @t = (SELECT MIN(TotalLignes) FROM @res);
-IF @t = 4 PRINT '  PASS 5.2  TotalLignes = 4';
-ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.2  TotalLignes attendu 4, obtenu ' + ISNULL(CAST(@t AS VARCHAR), 'NULL'); END
+IF @t = 8 PRINT '  PASS 5.2  TotalLignes = 8';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.2  TotalLignes attendu 8, obtenu ' + ISNULL(CAST(@t AS VARCHAR), 'NULL'); END
 
 -- tri : ORDER BY DTA_1..4 => 'c1' avant 'c2' avant 'n1'
 SET @ok = CASE WHEN (SELECT TOP 1 DTA_1 FROM @res ORDER BY DTA_1, DTA_2, DTA_3, DTA_4) = 'c1'
           THEN 1 ELSE 0 END;
 IF @ok = 1 PRINT '  PASS 5.3  tri ORDER BY DTA_1..DTA_4 respecte';
 ELSE BEGIN SET @fail += 1; PRINT '  FAIL 5.3  ordre de tri inattendu'; END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 6 : chemin rapide, memes regles que "=" (casse, espaces de fin) ---';
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
+    @p_lnauid = 'LNA_A', @p_linuid = 'L7', @p_edgdir = 'O', @p_type = 'O';
+
+SET @n = (SELECT COUNT(*) FROM @res);
+IF @n = 2 AND EXISTS (SELECT 1 FROM @res WHERE LIN_UID = 'L8')
+    PRINT '  PASS 6.1  R7 + R8 (X1/Y1/''Z1  ''/W1 = x1/y1/z1/w1)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 6.1  attendu 2 lignes dont R8, obtenu ' + CAST(@n AS VARCHAR); END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 7 : collision CHECKSUM (R9 / R10) : pas de faux resultat ---';
+SET @ok = CASE WHEN (SELECT DTA_HASH FROM dbo.LINE_VIS_EDG WHERE LIN_UID = 'L9')
+                  = (SELECT DTA_HASH FROM dbo.LINE_VIS_EDG WHERE LIN_UID = 'L10')
+          THEN 1 ELSE 0 END;
+IF @ok = 1 PRINT '  PASS 7.1  pre-requis : R9 et R10 ont bien le meme DTA_HASH';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 7.1  R9 et R10 devraient avoir le meme DTA_HASH'; END
+
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
+    @p_lnauid = 'LNA_A', @p_linuid = 'L9', @p_edgdir = 'O', @p_type = 'O';
+
+SET @n = (SELECT COUNT(*) FROM @res);
+SET @t = (SELECT MIN(TotalLignes) FROM @res);
+IF @n = 1 AND @t = 1 AND EXISTS (SELECT 1 FROM @res WHERE LIN_UID = 'L9')
+    PRINT '  PASS 7.2  seulement R9 (R10, meme hash mais autre noeud, ecarte)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 7.2  attendu R9 seul, obtenu ' + CAST(@n AS VARCHAR) + ' ligne(s)'; END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 8 : @p_useEdg = 1 avec EDG_1..4 NULL => chemin general (aucun filtre) ---';
+DELETE FROM @res;
+INSERT INTO @res EXEC dbo.LINE_VIS_GetNodesSuccessorsPredecessors
+    @p_lnauid = 'LNA_A', @p_linuid = 'L2', @p_edgdir = 'O', @p_type = 'O', @p_useEdg = 1;
+
+SET @t = (SELECT MIN(TotalLignes) FROM @res);
+IF @t = 8 PRINT '  PASS 8.1  TotalLignes = 8 (comme un noeud inexistant)';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 8.1  TotalLignes attendu 8, obtenu ' + ISNULL(CAST(@t AS VARCHAR), 'NULL'); END
+
+-------------------------------------------------------------------------------
+PRINT '--- TEST 9 : index de recherche deploye ---';
+IF COL_LENGTH(N'dbo.LINE_VIS_EDG', 'DTA_HASH') IS NOT NULL
+   AND EXISTS (SELECT 1 FROM sys.indexes
+               WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH'
+                 AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
+    PRINT '  PASS 9.1  colonne DTA_HASH + index IX_LINE_VIS_EDG_DIR_HASH presents';
+ELSE BEGIN SET @fail += 1; PRINT '  FAIL 9.1  colonne DTA_HASH ou index IX_LINE_VIS_EDG_DIR_HASH manquant'; END
 
 -------------------------------------------------------------------------------
 PRINT '';
