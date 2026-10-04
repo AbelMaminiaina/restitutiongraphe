@@ -51,6 +51,7 @@ button.danger { color: var(--danger); }
 .card p { margin: 0 0 6px; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
 .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
 .tag { background: var(--col); border-radius: 10px; padding: 1px 8px; }
+.tag.project { background: var(--accent); color: #fff; }
 .due.late { color: var(--danger); font-weight: 600; }
 .actions { display: flex; gap: 4px; margin-top: 6px; justify-content: space-between; }
 .actions button { padding: 2px 8px; }
