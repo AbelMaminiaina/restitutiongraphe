@@ -193,7 +193,12 @@ function renderCard(task, colIndex) {
   left.disabled = colIndex === 0;
   right.disabled = colIndex === COLUMNS.length - 1;
   const edit = makeButton("Modifier", "Modifier la tâche", () => openDialog(task.id));
-  actions.append(left, edit, right);
+  const copy = makeButton("⧉ Dupliquer", "Créer une copie de cette tâche juste en dessous", () => duplicateTask(task.id));
+  // Les boutons du milieu sont regroupés pour que ◀ reste à gauche et ▶ à droite
+  const middle = document.createElement("div");
+  middle.className = "actions-middle";
+  middle.append(edit, copy);
+  actions.append(left, middle, right);
   card.appendChild(actions);
 
   card.addEventListener("dblclick", e => { e.stopPropagation(); openDialog(task.id); });
@@ -256,6 +261,22 @@ function shiftTask(id, delta) {
   if (idx >= 0 && idx < COLUMNS.length) moveTask(id, COLUMNS[idx].id);
 }
 
+// Crée une copie d'une tâche, placée juste après l'originale (même colonne, même projet…).
+// - values : champs à utiliser pour la copie (par défaut ceux de la tâche enregistrée)
+// Renvoie l'identifiant de la copie.
+function duplicateTask(id, values) {
+  const index = state.tasks.findIndex(t => t.id === id);
+  const source = values || state.tasks[index];
+  const copy = Object.assign({}, source, {
+    id: newId(),
+    title: source.title + " (copie)",
+    createdAt: new Date().toISOString(),
+  });
+  state.tasks.splice(index + 1, 0, copy);   // insère la copie à la position index + 1
+  save(); render();
+  return copy.id;
+}
+
 // ---------------------------------------------------------------------------
 // Fenêtre de saisie
 // ---------------------------------------------------------------------------
@@ -269,6 +290,7 @@ function openDialog(taskId, columnId) {
   const task = taskId ? state.tasks.find(t => t.id === taskId) : null;
   document.getElementById("dialogTitle").textContent = task ? "Modifier la tâche" : "Nouvelle tâche";
   document.getElementById("deleteBtn").style.display = task ? "" : "none";
+  document.getElementById("duplicateBtn").style.display = task ? "" : "none";
   form.title.value = task ? task.title : "";
   form.description.value = task ? task.description : "";
   // Nouvelle tâche : on pré-remplit avec le projet actuellement filtré
@@ -281,9 +303,9 @@ function openDialog(taskId, columnId) {
   form.title.focus();
 }
 
-form.addEventListener("submit", e => {
-  e.preventDefault();
-  const values = {
+// Valeurs actuellement saisies dans la fenêtre
+function formValues() {
+  return {
     title: form.title.value.trim(),
     description: form.description.value.trim(),
     project: form.project.value.trim(),
@@ -292,6 +314,11 @@ form.addEventListener("submit", e => {
     due: form.due.value,
     column: form.column.value,
   };
+}
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  const values = formValues();
   if (!values.title) return;
   if (editingId) {
     Object.assign(state.tasks.find(t => t.id === editingId), values);
@@ -302,6 +329,15 @@ form.addEventListener("submit", e => {
 });
 
 document.getElementById("cancelBtn").addEventListener("click", () => dialog.close());
+// « Dupliquer » dans la fenêtre : la copie reprend ce qui est saisi (l'originale ne change pas),
+// puis la fenêtre affiche la copie pour pouvoir l'ajuster.
+document.getElementById("duplicateBtn").addEventListener("click", () => {
+  const values = formValues();
+  if (!editingId || !values.title) return;
+  const copyId = duplicateTask(editingId, values);
+  dialog.close();
+  openDialog(copyId);
+});
 document.getElementById("deleteBtn").addEventListener("click", () => {
   if (!editingId || !confirm("Supprimer cette tâche ?")) return;
   state.tasks = state.tasks.filter(t => t.id !== editingId);

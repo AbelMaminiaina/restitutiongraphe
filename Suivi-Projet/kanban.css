@@ -55,6 +55,7 @@ button.danger { color: var(--danger); }
 .due.late { color: var(--danger); font-weight: 600; }
 .actions { display: flex; gap: 4px; margin-top: 6px; justify-content: space-between; }
 .actions button { padding: 2px 8px; }
+.actions-middle { display: flex; gap: 4px; }
 
 dialog { border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
          color: var(--text); width: min(480px, calc(100vw - 32px)); padding: 16px; }
