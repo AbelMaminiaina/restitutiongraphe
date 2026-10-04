@@ -1,0 +1,25 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LineageExplorer", "LineageExplorer.csproj", "{0B161145-A170-40E7-A638-F889B0A0E80A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0B161145-A170-40E7-A638-F889B0A0E80A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B161145-A170-40E7-A638-F889B0A0E80A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B161145-A170-40E7-A638-F889B0A0E80A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B161145-A170-40E7-A638-F889B0A0E80A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A3813C50-811B-4A45-9FE3-CB16AC7E80F3}
+	EndGlobalSection
+EndGlobal

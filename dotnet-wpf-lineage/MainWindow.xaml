@@ -1,0 +1,223 @@
+<Window x:Class="LineageExplorer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:graph="clr-namespace:LineageExplorer.Graph"
+        Title="Lineage Explorer — RestitutionGrapheProd"
+        Width="1440" Height="860" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterScreen" WindowState="Maximized"
+        FontFamily="Segoe UI" FontSize="12.5"
+        Foreground="{StaticResource TextBrush}"
+        Background="{StaticResource SoftBrush}"
+        UseLayoutRounding="True"
+        Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <!-- Texte en lecture seule mais sélectionnable (pour copier une valeur) -->
+        <Style x:Key="ValueText" TargetType="TextBox">
+            <Setter Property="IsReadOnly" Value="True" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <ScrollViewer x:Name="PART_ContentHost" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Une ligne "libellé / valeur" (panneau de détails) -->
+        <DataTemplate x:Key="FieldTemplate">
+            <Grid Margin="0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="112" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{Binding Label}" Foreground="{StaticResource MutedBrush}" FontSize="11.5"
+                           TextWrapping="Wrap" Margin="0,1,8,0" />
+                <TextBox Grid.Column="1" Text="{Binding Value, Mode=OneWay}" Style="{StaticResource ValueText}" />
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="310" MinWidth="220" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="370" MinWidth="240" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ============ Colonne de gauche : recherche ============ -->
+            <Border Background="{StaticResource PanelBrush}">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Margin="16,14,16,8">
+                        <TextBlock Text="Lineage Explorer" FontSize="19" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,6">
+                            <Ellipse x:Name="ConnectionDot" Width="8" Height="8" Fill="#CBD5E1"
+                                     VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock x:Name="ConnectionText" Text="Connexion…" FontSize="11"
+                                       Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Colonne contient (DTA_1)" />
+                        <TextBox x:Name="ColumnBox" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Table contient (DTA_2)" />
+                        <TextBox x:Name="TableBox" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Schéma contient (DTA_3)" />
+                        <TextBox x:Name="SchemaBox" />
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="Environnement contient (DTA_4)" />
+                        <TextBox x:Name="EnvBox" />
+
+                        <Grid Margin="0,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="10" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Max résultats" />
+                                <TextBox x:Name="MaxResultsBox" Text="100" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="Max voisins par côté" />
+                                <TextBox x:Name="MaxNeighborsBox" Text="100" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- IsDefault : la touche Entrée lance la recherche -->
+                        <Button x:Name="SearchButton" Content="Rechercher" IsDefault="True" Margin="0,14,0,0"
+                                Style="{StaticResource AccentButton}" Click="SearchButton_Click" />
+
+                        <TextBlock x:Name="ResultsInfo" Margin="0,14,0,0" FontSize="11"
+                                   Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ListBox x:Name="ResultsList" Margin="8,0,8,8" BorderThickness="0" Background="Transparent"
+                             ItemContainerStyle="{StaticResource ResultItem}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.ScrollUnit="Pixel"
+                             SelectionChanged="ResultsList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding ColumnText}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding TableText}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding SchemaText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding EnvText}" FontSize="11" Foreground="{StaticResource MutedBrush}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <GridSplitter Grid.Column="1" Width="1" Background="{StaticResource LineBrush}"
+                          HorizontalAlignment="Stretch" ResizeBehavior="PreviousAndNext" />
+
+            <!-- ============ Centre : le graphe ============ -->
+            <Grid Grid.Column="2">
+                <graph:GraphView x:Name="Graph" />
+
+                <!-- Message quand rien n'est affiché -->
+                <StackPanel x:Name="EmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsHitTestVisible="False">
+                    <TextBlock Text="Choisis un nœud dans la liste de gauche" FontSize="16"
+                               Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" />
+                    <TextBlock Text="ses prédécesseurs et successeurs s'afficheront ici" Margin="0,4,0,0"
+                               Foreground="{StaticResource MutedBrush}" HorizontalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Légende -->
+                <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="12" Padding="10,6"
+                        Background="#E6FFFFFF" CornerRadius="6" BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1" IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal">
+                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{StaticResource PredBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Prédécesseurs" Margin="5,0,14,0" />
+                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{StaticResource AccentBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Nœud de départ" Margin="5,0,14,0" />
+                        <Rectangle Width="10" Height="10" RadiusX="2" RadiusY="2" Fill="{StaticResource SuccBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="Successeurs" Margin="5,0,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Barre d'outils -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12">
+                    <Button Content="−" Style="{StaticResource ToolButton}" ToolTip="Dézoomer (touche -)" Click="ZoomOut_Click" />
+                    <Button Content="+" Style="{StaticResource ToolButton}" ToolTip="Zoomer (touche +)" Click="ZoomIn_Click" Margin="4,0,0,0" />
+                    <Button Content="Tout voir" Style="{StaticResource ToolButton}" ToolTip="Cadrer tout le graphe (touche F)"
+                            Click="Fit_Click" Margin="4,0,0,0" />
+                    <Button Content="Recentrer" Style="{StaticResource ToolButton}" ToolTip="Centrer sur le nœud sélectionné (touche C)"
+                            Click="Center_Click" Margin="4,0,0,0" />
+                </StackPanel>
+
+                <!-- Aide -->
+                <TextBlock HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="14,0,0,10"
+                           Foreground="{StaticResource MutedBrush}" FontSize="11" IsHitTestVisible="False"
+                           Text="Molette : zoom · Glisser le fond : déplacer · ‹ › ou double-clic : déplier · Clic droit : plus d'actions" />
+            </Grid>
+
+            <GridSplitter Grid.Column="3" Width="1" Background="{StaticResource LineBrush}"
+                          HorizontalAlignment="Stretch" ResizeBehavior="PreviousAndNext" />
+
+            <!-- ============ Colonne de droite : détails ============ -->
+            <Border Grid.Column="4" Background="{StaticResource PanelBrush}">
+                <Grid>
+                    <TextBlock x:Name="DetailsEmpty" Margin="18" TextWrapping="Wrap"
+                               Foreground="{StaticResource MutedBrush}"
+                               Text="Clique sur un nœud ou sur une arête du graphe pour voir ses détails." />
+
+                    <ScrollViewer x:Name="DetailsScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                        <StackPanel Margin="18,14,18,18">
+                            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Subtitle}" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,10" />
+
+                            <ItemsControl ItemsSource="{Binding Fields}" ItemTemplate="{StaticResource FieldTemplate}" />
+
+                            <TextBlock Text="{Binding CardsHeader}" FontWeight="SemiBold" Margin="0,16,0,8" />
+                            <ItemsControl ItemsSource="{Binding Cards}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Background="{StaticResource SoftBrush}" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Header}" FontWeight="SemiBold" Margin="0,0,0,4"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <ItemsControl ItemsSource="{Binding Fields}" ItemTemplate="{StaticResource FieldTemplate}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ============ Barre d'état ============ -->
+        <Border Grid.Row="1" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource LineBrush}"
+                BorderThickness="0,1,0,0" Padding="12,5">
+            <DockPanel>
+                <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Annuler (Échap)" Visibility="Collapsed"
+                        Style="{StaticResource ToolButton}" Padding="10,2" Click="Cancel_Click" />
+                <ProgressBar x:Name="BusyBar" DockPanel.Dock="Right" Width="120" Height="4" Margin="10,0"
+                             IsIndeterminate="True" Visibility="Collapsed" Foreground="{StaticResource AccentBrush}"
+                             BorderThickness="0" Background="{StaticResource SoftBrush}" />
+                <TextBlock x:Name="StatusText" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Foreground="{StaticResource MutedBrush}" Text="Prêt" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
