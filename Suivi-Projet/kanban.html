@@ -13,6 +13,7 @@
   <div class="toolbar">
     <select id="projectFilter" title="Filtrer par projet"></select>
     <button id="addProjectBtn" title="Créer un nouveau projet">+ Projet</button>
+    <button id="notesBtn" title="Comptes rendus des points projet du projet affiché">📝 Points projet</button>
     <input type="search" id="search" placeholder="Rechercher une tâche…">
     <button class="primary" id="addBtn">+ Nouvelle tâche</button>
     <button id="exportBtn">Exporter JSON</button>
@@ -58,6 +59,35 @@
     <div class="dlg-actions">
       <button type="button" class="danger" id="deleteBtn">Supprimer</button>
       <button type="button" id="cancelBtn">Annuler</button>
+      <button type="submit" class="primary">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Liste des points projet (comptes rendus de réunion) du projet affiché -->
+<dialog id="notesDialog" class="wide">
+  <div class="notes-head">
+    <h2 id="notesTitle">Points projet</h2>
+    <button type="button" class="primary" id="addNoteBtn">+ Nouveau point</button>
+    <button type="button" id="closeNotesBtn">Fermer</button>
+  </div>
+  <div id="notesList"></div>
+</dialog>
+
+<!-- Fenêtre de création / modification d'un point projet -->
+<dialog id="noteDialog" class="wide">
+  <form method="dialog" id="noteForm">
+    <h2 id="noteDialogTitle" style="margin:0;font-size:16px">Nouveau point projet</h2>
+    <div class="row">
+      <label>Date <input type="date" name="date" required></label>
+      <label>Projet <input type="text" name="project" list="projectList"></label>
+    </div>
+    <label>Titre <input type="text" name="title" placeholder="ex. Point hebdo, Comité de pilotage…"></label>
+    <label>Participants <input type="text" name="participants" placeholder="ex. équipe projet, client"></label>
+    <label>Compte rendu <textarea name="content" rows="14"></textarea></label>
+    <div class="dlg-actions">
+      <button type="button" class="danger" id="deleteNoteBtn">Supprimer</button>
+      <button type="button" id="cancelNoteBtn">Annuler</button>
       <button type="submit" class="primary">Enregistrer</button>
     </div>
   </form>

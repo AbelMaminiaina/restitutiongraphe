@@ -4,7 +4,10 @@
 const STORAGE_KEY = "kanban-suivi-projet";
 // COLUMNS, PRIORITY_LABEL et les fonctions Excel/CSV viennent de kanban-excel.js (chargé avant ce fichier)
 
-// État complet du tableau : { name, projects: ["nom", ...], tasks: [{id, title, description, project, priority, label, due, column, createdAt}] }
+// État complet du tableau :
+// { name, projects: ["nom", ...],
+//   tasks: [{id, title, description, project, priority, label, due, column, createdAt}],
+//   notes: [{id, date, project, title, participants, content, createdAt}] }   <- comptes rendus des points projet
 let state = load();
 // Filtre projet affiché : "" = tous les projets, NO_PROJECT = tâches sans projet, sinon le nom du projet.
 // Il est mémorisé à part (préférence d'affichage, pas une donnée du tableau).
@@ -21,13 +24,14 @@ function load() {
     if (raw) {
       const data = JSON.parse(raw);
       if (data && Array.isArray(data.tasks)) {
-        // Les anciennes sauvegardes n'ont pas de liste de projets : on en crée une vide
+        // Les anciennes sauvegardes n'ont pas de liste de projets ni de notes : on en crée des vides
         if (!Array.isArray(data.projects)) data.projects = [];
+        if (!Array.isArray(data.notes)) data.notes = [];
         return data;
       }
     }
   } catch (e) { /* stockage indisponible ou corrompu : on repart à vide */ }
-  return { name: "Mon projet", projects: [], tasks: [] };
+  return { name: "Mon projet", projects: [], tasks: [], notes: [] };
 }
 
 function save() {
@@ -61,13 +65,14 @@ const board = document.getElementById("board");
 const searchInput = document.getElementById("search");
 const projectFilterSelect = document.getElementById("projectFilter");
 
-// Liste triée des projets : ceux créés avec « + Projet » (même sans tâche) et ceux présents dans les tâches
+// Liste triée des projets : ceux créés avec « + Projet » (même sans tâche),
+// et ceux présents dans les tâches et dans les notes
 function projectNames() {
-  return [...new Set(state.projects.concat(state.tasks.map(t => t.project)).filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, "fr"));
+  const all = state.projects.concat(state.tasks.map(t => t.project), state.notes.map(n => n.project));
+  return [...new Set(all.filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
 }
 
-// La tâche est-elle visible avec le filtre projet courant ?
+// La tâche (ou la note) est-elle visible avec le filtre projet courant ?
 function inCurrentProject(task) {
   if (!projectFilter) return true;
   if (projectFilter === NO_PROJECT) return !task.project;
@@ -229,6 +234,8 @@ function updateProgress() {
   document.getElementById("progressBar").style.width = pct + "%";
   document.getElementById("progressText").textContent =
     `${pct} % — ${done}/${total} terminée(s)` + (late ? ` — ${late} en retard` : "");
+  // Le bouton des notes affiche le nombre de points projet du projet filtré
+  document.getElementById("notesBtn").textContent = `📝 Points projet (${state.notes.filter(inCurrentProject).length})`;
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +336,104 @@ projectFilterSelect.addEventListener("change", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Points projet : comptes rendus datés, rattachés à un projet
+//
+// Bouton « 📝 Points projet » -> liste des notes du projet filtré (la plus récente en haut)
+// -> « + Nouveau point » ou « Modifier » ouvre la fenêtre de saisie d'une note.
+// ---------------------------------------------------------------------------
+const notesDialog = document.getElementById("notesDialog");
+const noteDialog = document.getElementById("noteDialog");
+const noteFields = document.getElementById("noteForm").elements;   // champs du formulaire, par leur « name »
+let editingNoteId = null;   // id de la note en cours de modification (null = création)
+
+// Trame proposée pour un nouveau point (on peut l'effacer ou la compléter librement)
+const NOTE_TEMPLATE = "Avancement :\n- \n\nDécisions :\n- \n\nActions (qui / quoi / quand) :\n- \n\nRisques / points bloquants :\n- ";
+
+function renderNotes() {
+  const projet = projectFilter && projectFilter !== NO_PROJECT ? projectFilter
+    : projectFilter === NO_PROJECT ? "sans projet" : "tous les projets";
+  document.getElementById("notesTitle").textContent = "Points projet — " + projet;
+
+  // Tri : date la plus récente d'abord ; à date égale, la dernière créée d'abord
+  const notes = state.notes.filter(inCurrentProject)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+
+  const list = document.getElementById("notesList");
+  list.innerHTML = "";
+  if (!notes.length) {
+    const p = document.createElement("p");
+    p.className = "hint";
+    p.textContent = "Aucun point projet pour l'instant. Clique sur « + Nouveau point ».";
+    list.appendChild(p);
+  }
+  notes.forEach(note => {
+    const item = document.createElement("article");
+    item.className = "note";
+
+    const head = document.createElement("div");
+    head.className = "meta";
+    addSpan(head, "note-date", "📅 " + formatDate(note.date));
+    if (note.title) addSpan(head, "note-title", note.title);
+    if (note.project && !projectFilter) addSpan(head, "tag project", note.project);
+    item.appendChild(head);
+
+    if (note.participants) addSpan(item, "note-people", "👥 " + note.participants);
+    const body = document.createElement("p");
+    body.textContent = note.content;
+    item.appendChild(body);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.appendChild(makeButton("Modifier", "Modifier ce point", () => openNoteDialog(note.id)));
+    item.appendChild(actions);
+    item.addEventListener("dblclick", () => openNoteDialog(note.id));
+    list.appendChild(item);
+  });
+}
+
+function openNoteDialog(noteId) {
+  editingNoteId = noteId;
+  const note = noteId ? state.notes.find(n => n.id === noteId) : null;
+  document.getElementById("noteDialogTitle").textContent = note ? "Modifier le point projet" : "Nouveau point projet";
+  document.getElementById("deleteNoteBtn").style.display = note ? "" : "none";
+  noteFields.date.value = note ? note.date : today();
+  noteFields.project.value = note ? note.project : (projectFilter && projectFilter !== NO_PROJECT ? projectFilter : "");
+  noteFields.title.value = note ? note.title : "Point projet";
+  noteFields.participants.value = note ? note.participants : "";
+  noteFields.content.value = note ? note.content : NOTE_TEMPLATE;
+  noteDialog.showModal();
+  noteFields.content.focus();
+}
+
+document.getElementById("noteForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const values = {
+    date: noteFields.date.value || today(),
+    project: noteFields.project.value.trim(),
+    title: noteFields.title.value.trim(),
+    participants: noteFields.participants.value.trim(),
+    content: noteFields.content.value.trim(),
+  };
+  if (editingNoteId) {
+    Object.assign(state.notes.find(n => n.id === editingNoteId), values);
+  } else {
+    state.notes.push({ id: newId(), createdAt: new Date().toISOString(), ...values });
+  }
+  noteDialog.close(); save(); render(); renderNotes();
+});
+
+document.getElementById("cancelNoteBtn").addEventListener("click", () => noteDialog.close());
+document.getElementById("deleteNoteBtn").addEventListener("click", () => {
+  if (!editingNoteId || !confirm("Supprimer ce point projet ?")) return;
+  state.notes = state.notes.filter(n => n.id !== editingNoteId);
+  noteDialog.close(); save(); render(); renderNotes();
+});
+
+document.getElementById("notesBtn").addEventListener("click", () => { renderNotes(); notesDialog.showModal(); });
+document.getElementById("addNoteBtn").addEventListener("click", () => openNoteDialog(null));
+document.getElementById("closeNotesBtn").addEventListener("click", () => notesDialog.close());
+
+// ---------------------------------------------------------------------------
 // Renommage du projet (clic sur le titre, Entrée pour valider, Échap pour annuler)
 // ---------------------------------------------------------------------------
 const titleEl = document.getElementById("projectTitle");
@@ -376,6 +481,15 @@ importFile.addEventListener("change", () => {
       state = {
         name: data.name || "Projet importé",
         projects: Array.isArray(data.projects) ? data.projects.map(String).filter(Boolean) : [],
+        notes: (Array.isArray(data.notes) ? data.notes : []).map(n => ({
+          id: n.id || newId(),
+          date: /^\d{4}-\d{2}-\d{2}$/.test(n.date || "") ? n.date : today(),
+          project: String(n.project || ""),
+          title: String(n.title || ""),
+          participants: String(n.participants || ""),
+          content: String(n.content || ""),
+          createdAt: n.createdAt || new Date().toISOString(),
+        })),
         tasks: data.tasks.map(t => ({
           id: t.id || newId(),
           title: String(t.title || "Sans titre"),
