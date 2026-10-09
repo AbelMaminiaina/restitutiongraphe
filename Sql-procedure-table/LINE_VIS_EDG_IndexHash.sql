@@ -57,7 +57,8 @@ GO
 USE RestitutionGrapheProd;
 GO
 
--- 1. Colonne calculee (non persistee)
+-- 1. Colonne calculee (non persistee) - deja presente si la table a ete
+--    creee par la version actuelle de LINE_VIS_EDG.sql (rien a faire alors)
 IF COL_LENGTH(N'dbo.LINE_VIS_EDG', 'DTA_HASH') IS NULL
     ALTER TABLE dbo.LINE_VIS_EDG
         ADD DTA_HASH AS CHECKSUM(DTA_1, DTA_2, DTA_3, DTA_4);

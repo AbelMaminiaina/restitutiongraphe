@@ -8,8 +8,21 @@
 --  La photo ne montre que les lignes 22 a 49 : le bloc de suppression de
 --  l'index IX_LINE_VIS_EDG_COV (debut du fichier) est reconstruit a partir
 --  de la seule ligne lisible "DROP INDEX [IX_LINE_VIS_EDG_COV] ON [dbo].[LINE_VIS_EDG]".
---  Seul ajout : l'en-tete CREATE DATABASE / USE ci-dessous.
+--  Ajouts : l'en-tete CREATE DATABASE / USE ci-dessous, et la colonne
+--  calculee DTA_HASH directement dans le CREATE TABLE (auparavant ajoutee
+--  par ALTER TABLE dans LINE_VIS_EDG_IndexHash.sql).
+--
+--  Recreation complete (drop + 7 M lignes) - ordre :
+--    1. DROP TABLE dbo.LINE_VIS_EDG;
+--    2. LINE_VIS_EDG.sql            (ce fichier)
+--    3. LINE_VIS_EDG_data.sql       (insertion sans index secondaire : plus rapide)
+--    4. LINE_VIS_EDG_IndexHash.sql  (index (EDG_DIR, DTA_HASH) construit en une passe)
 -- =============================================================================
+
+-- Options requises pour qu'un futur index sur DTA_HASH soit utilisable
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
 
 IF DB_ID(N'RestitutionGrapheProd') IS NULL
     CREATE DATABASE RestitutionGrapheProd;
@@ -46,6 +59,9 @@ BEGIN
         EDG_4       VARCHAR(1000),
         TXN_DTA     VARCHAR(MAX),
         PRX_TXN_DTA VARCHAR(MAX),
+        -- Empreinte de DTA_1..DTA_4 (colonne calculee non persistee),
+        -- indexee par LINE_VIS_EDG_IndexHash.sql (IX_LINE_VIS_EDG_DIR_HASH).
+        DTA_HASH    AS CHECKSUM(DTA_1, DTA_2, DTA_3, DTA_4),
         CONSTRAINT PK_LINE_VIS_EDG PRIMARY KEY (LNA_UID, LIN_UID, EDG_DIR)
     )
 END
