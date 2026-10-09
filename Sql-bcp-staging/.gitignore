@@ -1,0 +1,4 @@
+# Fichiers .data generes par LINE_VIS_EDG_2_STG_data.ps1 (volumineux),
+# sauf l'exemple de 1 000 lignes fourni avec le projet
+*.data
+!LINE_VIS_EDG_2_STG.data

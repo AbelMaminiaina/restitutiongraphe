@@ -1,0 +1,2 @@
+# Fichiers .data : octets exacts (fin de ligne 07 08 0D 0A), aucune conversion CRLF/LF
+*.data -text
