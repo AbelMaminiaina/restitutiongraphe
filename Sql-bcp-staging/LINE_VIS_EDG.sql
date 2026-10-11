@@ -4,7 +4,7 @@
 --
 --  Ordre d'installation du projet Sql-bcp-staging :
 --    1. LINE_VIS_EDG.sql         (ce fichier : table finale + index sur DTA_HASH)
---    2. LINE_VIS_EDG_2_STG.sql   (table d'arrivee bcp 13 colonnes + trigger)
+--    2. LINE_VIS_EDG_BCP_view.sql (vue d'import bcp 13 colonnes, sans trigger)
 --    3. LINE_VIS_HEA.sql         (table d'en-tete, 1 ligne par LNA_UID)
 --    4. LINE_VIS_GetNodesSuccessorsPredecessors.sql (procedure)
 --    5. LINE_VIS_EDG_bcp.cmd     (import d'un fichier .data)
