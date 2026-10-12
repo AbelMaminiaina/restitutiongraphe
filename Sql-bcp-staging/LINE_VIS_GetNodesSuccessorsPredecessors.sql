@@ -1,58 +1,66 @@
 -- =============================================================================
---  Procedure dbo.LINE_VIS_GetNodesSuccessorsPredecessors (version DTA_HASH)
+--  Procedure dbo.LINE_VIS_GetNodesSuccessorsPredecessors (version hash generique)
 --  Base : RestitutionGrapheProd (adapter le USE si besoin, ex. LINE_VIS_NI)
 --
 --  Reprise de Sql-procedure-table/LINE_VIS_GetNodesSuccessorsPredecessors.sql
 --  (memes parametres, memes colonnes, meme ordre en sortie), optimisee
---  autour de la colonne calculee DTA_HASH = CHECKSUM(DTA_1, DTA_2, DTA_3, DTA_4).
+--  autour des colonnes calculees de LINE_VIS_EDG :
+--    DTA_HASH   = CHECKSUM(DTA_1, DTA_2, DTA_3, DTA_4)
+--    DTA_n_HASH = CHECKSUM(DTA_n)          (n = 1..4)
 --
 --  But : a partir d'un noeud (LNA_UID, LIN_UID, EDG_DIR = @p_edgdir), lire
 --  ses coordonnees DTA_1..DTA_4 (ou EDG_1..EDG_4 si @p_useEdg = 1), puis
 --  renvoyer les aretes qui ont ces coordonnees et EDG_DIR = @p_type, jointes
 --  a LINE_VIS_HEA, limitees a @p_maxres lignes, avec le total (TotalLignes).
+--  Une coordonnee NULL = pas de filtre dessus (regle d'origine).
 --
 --  -------------------------------------------------------------------------
---  Optimisations par rapport a la version Sql-procedure-table :
+--  Hypothese : une recherche trouve au plus quelques centaines de lignes.
 --
---    1. Hash lu dans la table, pas recalcule sur des variables.
---       Avant : @h = CHECKSUM(@DTA1, @DTA2, @DTA3, @DTA4) sur des variables.
---       Or CHECKSUM depend de la collation : les variables prennent celle de
---       la BASE, DTA_HASH celle des COLONNES. Si elles different, @h ne
---       retrouve aucune ligne (resultat vide, silencieusement).
---       Maintenant, a l'etape 1 (lecture du noeud par la cle primaire) :
---         @p_useEdg = 0 -> @h = DTA_HASH du noeud (deja calcule) ;
---         @p_useEdg = 1 -> @h = CHECKSUM(EDG_1, EDG_2, EDG_3, EDG_4), calcule
---                          sur les colonnes -> meme collation que DTA_HASH.
+--    1. Hash lus dans la table, pas recalcules sur des variables : CHECKSUM
+--       depend de la collation (variables = collation de la BASE, colonnes =
+--       collation des COLONNES). A l'etape 1 (lecture du noeud) :
+--         @p_useEdg = 0 -> hash deja calcules du noeud (DTA_HASH, DTA_n_HASH) ;
+--         @p_useEdg = 1 -> CHECKSUM(EDG_n) calcule sur les colonnes.
 --
---    2. Index couvrant (LINE_VIS_EDG.sql de ce dossier) :
---         IX_LINE_VIS_EDG_DIR_HASH (EDG_DIR, DTA_HASH) INCLUDE (DTA_1..DTA_4)
---       Le controle anti-collision (DTA_n = @DTAn) et le COUNT(*) se font
---       dans l'index seul : plus de lecture de la table ligne par ligne
---       (avant : 1 lookup par ligne trouvee, soit des milliers pour un noeud
---       tres partage). Seules les @p_maxres lignes affichees sont relues
---       dans la table (pour TXN_DTA, EDG_*, PRX_TXN_DTA).
+--    2. Sondage : pour chaque coordonnee connue, nombre de lignes de meme
+--       hash compte dans son index etroit, arrete a 501 (2e passe a 20 001
+--       si toutes atteignent 501). La plus selective "mene" la recherche.
 --
---    3. Chemin rapide en 2 temps, comme le chemin general : on ne garde
---       d'abord que les CLES des @p_maxres premieres lignes (lues dans
---       l'index, deja dans l'ordre LNA_UID, LIN_UID : aucun tri), puis on
---       relit les colonnes larges pour ces seules lignes.
+--    3. Recherche par l'index de la coordonnee qui mene (INDEX impose, plan
+--       fixe, SANS recompilation), puis egalite exacte sur toutes les
+--       coordonnees connues (elimine les collisions de CHECKSUM : resultat
+--       toujours juste). Les 4 connues -> index couvrant
+--       IX_LINE_VIS_EDG_DIR_HASH, sans sondage.
 --
---    Inchange : chemin general (noeud introuvable, ou coordonnees EDG en
---    partie NULL avec @p_useEdg = 1 : une coordonnee NULL = pas de filtre,
---    le hash ne peut pas servir), etape 3 (jointure LINE_VIS_HEA +
---    CURRENT_NODE sur les <= @p_maxres lignes).
+--    4. Lignes trouvees -> table @trouve : total (TotalLignes) et tri des
+--       @p_maxres premieres se font sur cette petite table.
 --
---  Rappel : DTA_HASH peut etre identique pour deux noeuds differents
---  (collision de CHECKSUM) ; l'egalite exacte DTA_n = @DTAn est gardee,
---  le resultat est donc toujours juste.
+--  Aucune coordonnee connue (noeud introuvable) : aucun filtre, parcours de
+--  la table (plusieurs secondes), cas exceptionnel.
 --
---  Dependances : dbo.LINE_VIS_EDG + index IX_LINE_VIS_EDG_DIR_HASH
+--  Mesure (copie de 7,2 M lignes, 30 appels par cas, temps moyen) :
+--      lignes trouvees      avant          apres
+--              1          1,5 a 3,4 s      0 ms
+--            100              -            3 a 5 ms
+--            300              -           10 a 16 ms
+--            500              -           19 a 23 ms
+--          2 100          3,0 a 3,8 s     90 ms
+--  Au-dela, le temps croit avec le nombre de lignes trouvees (~4 ms par
+--  100 lignes : lecture dans la table + envoi des colonnes VARCHAR(MAX)).
+--
+--  Tri : DTA_1..DTA_4 puis LNA_UID, LIN_UID (comme le chemin general
+--  d'avant). Les 4 coordonnees connues -> elles sont toutes egales, l'ordre
+--  revient a LNA_UID, LIN_UID (comme le chemin rapide d'avant).
+--
+--  Dependances : dbo.LINE_VIS_EDG + colonnes DTA_HASH, DTA_n_HASH + index
+--                IX_LINE_VIS_EDG_DIR_HASH, IX_LINE_VIS_EDG_DIR_HASH1..4
 --                (LINE_VIS_EDG.sql de ce dossier), dbo.LINE_VIS_HEA
 --                (LINE_VIS_HEA.sql de ce dossier)
 -- =============================================================================
 
--- Obligatoire pour que la procedure puisse utiliser l'index sur la colonne
--- calculee DTA_HASH (ces 2 options sont memorisees a la creation).
+-- Obligatoire pour que la procedure puisse utiliser les index sur les
+-- colonnes calculees (ces 2 options sont memorisees a la creation).
 SET ANSI_NULLS ON;
 SET QUOTED_IDENTIFIER ON;
 GO
@@ -73,27 +81,168 @@ BEGIN
 
     /* 1. Coordonnees + hash du noeud, par la cle primaire
           (LNA_UID, LIN_UID, EDG_DIR) -> lecture directe d'une ligne.
-          Noeud introuvable -> tout reste NULL -> chemin general. */
+          Noeud introuvable -> tout reste NULL -> aucun filtre sur les
+          coordonnees (regle d'origine). */
     DECLARE @DTA1 VARCHAR(1000)
     DECLARE @DTA2 VARCHAR(1000)
     DECLARE @DTA3 VARCHAR(8000)
     DECLARE @DTA4 VARCHAR(1000)
-    DECLARE @h    INT
+    DECLARE @h    INT          -- hash des 4 coordonnees
+    DECLARE @h1   INT          -- hash de chaque coordonnee
+    DECLARE @h2   INT
+    DECLARE @h3   INT
+    DECLARE @h4   INT
 
     SELECT TOP(1)
         @DTA1 = CASE WHEN @p_useEdg = 0 THEN DTA_1 ELSE EDG_1 END,
         @DTA2 = CASE WHEN @p_useEdg = 0 THEN DTA_2 ELSE EDG_2 END,
         @DTA3 = CASE WHEN @p_useEdg = 0 THEN DTA_3 ELSE EDG_3 END,
         @DTA4 = CASE WHEN @p_useEdg = 0 THEN DTA_4 ELSE EDG_4 END,
-        -- Hash calcule sur les COLONNES (meme collation que DTA_HASH)
+        -- Hash calcules sur les COLONNES (meme collation que DTA_*_HASH)
         @h    = CASE WHEN @p_useEdg = 0 THEN DTA_HASH
-                     ELSE CHECKSUM(EDG_1, EDG_2, EDG_3, EDG_4) END
+                     ELSE CHECKSUM(EDG_1, EDG_2, EDG_3, EDG_4) END,
+        @h1   = CASE WHEN @p_useEdg = 0 THEN DTA_1_HASH ELSE CHECKSUM(EDG_1) END,
+        @h2   = CASE WHEN @p_useEdg = 0 THEN DTA_2_HASH ELSE CHECKSUM(EDG_2) END,
+        @h3   = CASE WHEN @p_useEdg = 0 THEN DTA_3_HASH ELSE CHECKSUM(EDG_3) END,
+        @h4   = CASE WHEN @p_useEdg = 0 THEN DTA_4_HASH ELSE CHECKSUM(EDG_4) END
     FROM dbo.LINE_VIS_EDG
     WHERE LNA_UID  = @p_lnauid
       AND LIN_UID  = @p_linuid
       AND EDG_DIR  = @p_edgdir
 
-    /* 2. Cles des lignes a afficher (au plus @p_maxres), dans l'ordre. */
+    -- CHECKSUM(NULL) n'est pas NULL : on remet a NULL le hash de chaque
+    -- coordonnee NULL (= pas de filtre), et le hash global si l'une manque.
+    IF @DTA1 IS NULL SET @h1 = NULL
+    IF @DTA2 IS NULL SET @h2 = NULL
+    IF @DTA3 IS NULL SET @h3 = NULL
+    IF @DTA4 IS NULL SET @h4 = NULL
+    IF @h1 IS NULL OR @h2 IS NULL OR @h3 IS NULL OR @h4 IS NULL SET @h = NULL
+
+    /* 2. Recherche SANS recompilation (plans stables, mis en cache) :
+          on suppose qu'une recherche trouve au plus quelques centaines de
+          lignes.
+          a) Sondage : pour chaque coordonnee connue, nombre de lignes de
+             meme hash, compte dans son index etroit et arrete a @plafond
+             (TOP) -> peu de lignes d'index lues, quelques ms au plus.
+             Plafond 501 d'abord ; si TOUTES les coordonnees l'atteignent,
+             le sondage ne les departage pas -> 2e passe a 20 001 (sinon
+             une coordonnee a 600 000 lignes pourrait mener : 10 s, mesure).
+          b) La coordonnee la plus selective "mene" la recherche : seek dans
+             son index (INDEX impose : plan fixe), puis egalite exacte sur
+             toutes les coordonnees connues (elimine les collisions de
+             CHECKSUM). Les 4 connues -> index couvrant
+             IX_LINE_VIS_EDG_DIR_HASH, sans sondage.
+          c) Toutes les lignes trouvees vont dans @trouve : total et tri se
+             font sur cette petite table. */
+    DECLARE @mene    TINYINT           -- coordonnee qui mene (1..4)
+    DECLARE @nMin    INT
+    DECLARE @n       INT
+    DECLARE @plafond INT = 501
+
+    WHILE @h IS NULL
+    BEGIN
+        SELECT @nMin = 2147483647, @mene = NULL
+
+        IF @h1 IS NOT NULL
+        BEGIN
+            SELECT @n = COUNT(*) FROM (
+                SELECT TOP (@plafond) 1 AS x
+                FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH1))
+                WHERE EDG_DIR = @p_type AND DTA_1_HASH = @h1) z
+            IF @n < @nMin SELECT @nMin = @n, @mene = 1
+        END
+        IF @h2 IS NOT NULL
+        BEGIN
+            SELECT @n = COUNT(*) FROM (
+                SELECT TOP (@plafond) 1 AS x
+                FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH2))
+                WHERE EDG_DIR = @p_type AND DTA_2_HASH = @h2) z
+            IF @n < @nMin SELECT @nMin = @n, @mene = 2
+        END
+        IF @h3 IS NOT NULL
+        BEGIN
+            SELECT @n = COUNT(*) FROM (
+                SELECT TOP (@plafond) 1 AS x
+                FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH3))
+                WHERE EDG_DIR = @p_type AND DTA_3_HASH = @h3) z
+            IF @n < @nMin SELECT @nMin = @n, @mene = 3
+        END
+        IF @h4 IS NOT NULL
+        BEGIN
+            SELECT @n = COUNT(*) FROM (
+                SELECT TOP (@plafond) 1 AS x
+                FROM dbo.LINE_VIS_EDG WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH4))
+                WHERE EDG_DIR = @p_type AND DTA_4_HASH = @h4) z
+            IF @n < @nMin SELECT @nMin = @n, @mene = 4
+        END
+
+        -- Departagees (ou aucune coordonnee connue, ou 2e passe faite) : fini.
+        IF @mene IS NULL OR @nMin < @plafond OR @plafond > 501 BREAK
+        SET @plafond = 20001
+    END
+
+    DECLARE @trouve TABLE (
+        LNA_UID VARCHAR(200),
+        LIN_UID VARCHAR(500),
+        EDG_DIR CHAR(1),
+        DTA_1   VARCHAR(1000),
+        DTA_2   VARCHAR(1000),
+        DTA_3   VARCHAR(8000),
+        DTA_4   VARCHAR(1000)
+    )
+
+    IF @h IS NOT NULL
+        -- Les 4 coordonnees connues : tout se lit dans l'index couvrant.
+        INSERT INTO @trouve
+        SELECT e.LNA_UID, e.LIN_UID, e.EDG_DIR, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH))
+        WHERE e.EDG_DIR = @p_type AND e.DTA_HASH = @h
+          AND e.DTA_1 = @DTA1 AND e.DTA_2 = @DTA2
+          AND e.DTA_3 = @DTA3 AND e.DTA_4 = @DTA4
+          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
+                      WHERE hh.LNA_UID = e.LNA_UID)
+    ELSE IF @mene = 1
+        INSERT INTO @trouve
+        SELECT e.LNA_UID, e.LIN_UID, e.EDG_DIR, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH1))
+        WHERE e.EDG_DIR = @p_type AND e.DTA_1_HASH = @h1 AND e.DTA_1 = @DTA1
+          AND (@DTA2 IS NULL OR e.DTA_2 = @DTA2)
+          AND (@DTA3 IS NULL OR e.DTA_3 = @DTA3)
+          AND (@DTA4 IS NULL OR e.DTA_4 = @DTA4)
+          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
+                      WHERE hh.LNA_UID = e.LNA_UID)
+    ELSE IF @mene = 2
+        INSERT INTO @trouve
+        SELECT e.LNA_UID, e.LIN_UID, e.EDG_DIR, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH2))
+        WHERE e.EDG_DIR = @p_type AND e.DTA_2_HASH = @h2 AND e.DTA_2 = @DTA2
+          AND (@DTA1 IS NULL OR e.DTA_1 = @DTA1)
+          AND (@DTA3 IS NULL OR e.DTA_3 = @DTA3)
+          AND (@DTA4 IS NULL OR e.DTA_4 = @DTA4)
+          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
+                      WHERE hh.LNA_UID = e.LNA_UID)
+    ELSE IF @mene = 3
+        INSERT INTO @trouve
+        SELECT e.LNA_UID, e.LIN_UID, e.EDG_DIR, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH3))
+        WHERE e.EDG_DIR = @p_type AND e.DTA_3_HASH = @h3 AND e.DTA_3 = @DTA3
+          AND (@DTA1 IS NULL OR e.DTA_1 = @DTA1)
+          AND (@DTA2 IS NULL OR e.DTA_2 = @DTA2)
+          AND (@DTA4 IS NULL OR e.DTA_4 = @DTA4)
+          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
+                      WHERE hh.LNA_UID = e.LNA_UID)
+    ELSE IF @mene = 4
+        INSERT INTO @trouve
+        SELECT e.LNA_UID, e.LIN_UID, e.EDG_DIR, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH4))
+        WHERE e.EDG_DIR = @p_type AND e.DTA_4_HASH = @h4 AND e.DTA_4 = @DTA4
+          AND (@DTA1 IS NULL OR e.DTA_1 = @DTA1)
+          AND (@DTA2 IS NULL OR e.DTA_2 = @DTA2)
+          AND (@DTA3 IS NULL OR e.DTA_3 = @DTA3)
+          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
+                      WHERE hh.LNA_UID = e.LNA_UID)
+
+    DECLARE @TotalLignes INT
     DECLARE @cles TABLE (
         LNA_UID VARCHAR(200),
         LIN_UID VARCHAR(500),
@@ -101,65 +250,32 @@ BEGIN
         Ordre   INT            -- ordre d'affichage (1, 2, 3...)
     )
 
-    DECLARE @TotalLignes INT
-
-    IF @DTA1 IS NOT NULL AND @DTA2 IS NOT NULL
-   AND @DTA3 IS NOT NULL AND @DTA4 IS NOT NULL
+    IF @h IS NOT NULL OR @mene IS NOT NULL
     BEGIN
-        /* 2a. CHEMIN RAPIDE : les 4 coordonnees sont connues.
-               Tout se lit dans l'index IX_LINE_VIS_EDG_DIR_HASH :
-                 EDG_DIR = @p_type AND DTA_HASH = @h -> recherche (seek) ;
-                 DTA_n = @DTAn -> elimine les collisions du hash (colonnes
-                 incluses dans l'index, pas de lecture de la table) ;
-                 LNA_UID -> dans l'index aussi (cle primaire) pour le
-                 EXISTS sur LINE_VIS_HEA. */
-        SELECT @TotalLignes = COUNT(*)
-        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH))
-        WHERE e.EDG_DIR  = @p_type
-          AND e.DTA_HASH = @h
-          AND e.DTA_1 = @DTA1 AND e.DTA_2 = @DTA2
-          AND e.DTA_3 = @DTA3 AND e.DTA_4 = @DTA4
-          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
-                      WHERE hh.LNA_UID = e.LNA_UID)
+        SELECT @TotalLignes = COUNT(*) FROM @trouve
 
-        -- Les @p_maxres premieres cles : l'index les rend deja triees par
-        -- LNA_UID, LIN_UID (a EDG_DIR et DTA_HASH fixes) -> pas de tri.
-        IF @TotalLignes > 0
         INSERT INTO @cles (LNA_UID, LIN_UID, EDG_DIR, Ordre)
         SELECT TOP (@p_maxres)
-            e.LNA_UID, e.LIN_UID, e.EDG_DIR,
-            ROW_NUMBER() OVER (ORDER BY e.LNA_UID, e.LIN_UID)
-        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK, INDEX (IX_LINE_VIS_EDG_DIR_HASH))
-        WHERE e.EDG_DIR  = @p_type
-          AND e.DTA_HASH = @h
-          AND e.DTA_1 = @DTA1 AND e.DTA_2 = @DTA2
-          AND e.DTA_3 = @DTA3 AND e.DTA_4 = @DTA4
-          AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
-                      WHERE hh.LNA_UID = e.LNA_UID)
-        ORDER BY e.LNA_UID, e.LIN_UID
+            t.LNA_UID, t.LIN_UID, t.EDG_DIR,
+            ROW_NUMBER() OVER (ORDER BY t.DTA_1, t.DTA_2, t.DTA_3, t.DTA_4,
+                                        t.LNA_UID, t.LIN_UID)
+        FROM @trouve t
+        ORDER BY t.DTA_1, t.DTA_2, t.DTA_3, t.DTA_4, t.LNA_UID, t.LIN_UID
     END
     ELSE
     BEGIN
-        /* 2b. CHEMIN GENERAL : noeud introuvable ou coordonnees en partie
-               NULL. Une coordonnee NULL = pas de filtre (regle d'origine) :
-               le hash ne peut pas servir, parcours de la table.
-               OPTION (RECOMPILE) : plan calcule avec les vraies valeurs de
-               @DTA1..@DTA4 (filtres "NULL = pas de filtre" simplifies).
-               OPTION (HASH JOIN) : pour le EXISTS sur LINE_VIS_HEA (le plan
-               choisi seul etait bien plus lent sur 3,5 M lignes). */
+        /* Aucune coordonnee connue (noeud introuvable, ou EDG_1..EDG_4 tous
+           NULL) : aucun filtre, toutes les aretes de type @p_type. Parcours
+           de la table, lent (plusieurs secondes), cas exceptionnel.
+           OPTION (HASH JOIN) : pour le EXISTS sur LINE_VIS_HEA. */
         SELECT @TotalLignes = COUNT(*)
         FROM dbo.LINE_VIS_EDG e WITH (NOLOCK)
         WHERE e.EDG_DIR = @p_type
-          AND (@DTA1 IS NULL OR e.DTA_1 = @DTA1)
-          AND (@DTA2 IS NULL OR e.DTA_2 = @DTA2)
-          AND (@DTA3 IS NULL OR e.DTA_3 = @DTA3)
-          AND (@DTA4 IS NULL OR e.DTA_4 = @DTA4)
           AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
                       WHERE hh.LNA_UID = e.LNA_UID)
-        OPTION (RECOMPILE, HASH JOIN)
+        OPTION (HASH JOIN)
 
-        -- Les @p_maxres premieres cles selon le tri (colonnes etroites
-        -- seulement : SQL Server ne garde que @p_maxres lignes pendant le tri).
+        -- ROW_NUMBER() hors du TOP : sinon tri de toutes les lignes.
         IF @TotalLignes > 0
         INSERT INTO @cles (LNA_UID, LIN_UID, EDG_DIR, Ordre)
         SELECT k.LNA_UID, k.LIN_UID, k.EDG_DIR,
@@ -171,10 +287,6 @@ BEGIN
                 c.DTA_1, c.DTA_2, c.DTA_3, c.DTA_4
             FROM dbo.LINE_VIS_EDG c WITH (NOLOCK)
             WHERE c.EDG_DIR = @p_type
-              AND (@DTA1 IS NULL OR c.DTA_1 = @DTA1)
-              AND (@DTA2 IS NULL OR c.DTA_2 = @DTA2)
-              AND (@DTA3 IS NULL OR c.DTA_3 = @DTA3)
-              AND (@DTA4 IS NULL OR c.DTA_4 = @DTA4)
               AND EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA hh WITH (NOLOCK)
                           WHERE hh.LNA_UID = c.LNA_UID)
             ORDER BY c.DTA_1, c.DTA_2, c.DTA_3, c.DTA_4, c.LNA_UID, c.LIN_UID
