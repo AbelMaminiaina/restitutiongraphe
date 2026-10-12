@@ -1,11 +1,11 @@
 ﻿# =============================================================================
-#  Genere un fichier .data de test pour dbo.LINE_VIS_EDG_2_STG (import bcp)
+#  Genere un fichier .data de test pour dbo.LINE_VIS_EDG (import bcp)
 #
 #  Format du fichier (identique aux fichiers .data de prod, cf. commande bcp) :
-#    - pas d'en-tete, 13 champs dans l'ordre des colonnes de la table :
+#    - pas d'en-tete, 13 champs dans l'ordre des colonnes de la vue
+#      LINE_VIS_EDG_BCP :
 #      LNA_UID, LIN_UID, DTA_1..DTA_4, EDG_DIR, EDG_1..EDG_4, TXN_DTA, PRX_TXN_DTA
-#      (pas de DTA_HASH : c'est le trigger TR_BCP_Auto_Transfer qui la calcule
-#       en recopiant les lignes dans LINE_VIS_EDG_2) ;
+#      (pas de colonnes de hash : SQL Server les calcule dans LINE_VIS_EDG) ;
 #    - separateur de champs  : 0x7F 0x7F 0x7F  (DEL DEL DEL)  -> bcp -t0x7F7F7F
 #    - fin de ligne          : 0x07 0x08 0x0D 0x0A (BEL BS CR LF) -> bcp -r0x07080D0A
 #    - encodage UTF-8 sans BOM                               -> bcp -C 65001
@@ -22,9 +22,8 @@
 #    .\LINE_VIS_EDG_2_STG_data.ps1 -Lignes 3000000 -Fichier C:\Data\test.data
 #  (si PowerShell refuse : powershell -ExecutionPolicy Bypass -File .\LINE_VIS_EDG_2_STG_data.ps1)
 #
-#  Import ensuite (meme commande que la prod) :
-#    bcp dbo.LINE_VIS_EDG_2_STG in C:\Data\test.data -c -C 65001 -t0x7F7F7F
-#        -r0x07080D0A -k -h "FIRE_TRIGGERS" -q -T -S <serveur> -d LINE_VIS_NI
+#  Import ensuite (bcp via la vue LINE_VIS_EDG_BCP, sans trigger) :
+#    .\LINE_VIS_EDG_bcp.cmd C:\Data\test.data [serveur] [base]
 # =============================================================================
 
 param(
