@@ -1,17 +1,17 @@
 -- =============================================================================
---  LINE_VIS_EDG : table finale des aretes (13 colonnes + 5 hash calcules)
+--  LINE_VIS_EDG : table finale des aretes (14 colonnes dont DTA_HASH calculee)
 --  Base : RestitutionGrapheProd (adapter le USE si besoin, ex. LINE_VIS_NI)
 --
 --  Ordre d'installation du projet Sql-bcp-staging :
---    1. LINE_VIS_EDG.sql         (ce fichier : table finale + index sur les hash)
+--    1. LINE_VIS_EDG.sql         (ce fichier : table finale + index sur DTA_HASH)
 --    2. LINE_VIS_EDG_BCP_view.sql (vue d'import bcp 13 colonnes, sans trigger)
 --    3. LINE_VIS_HEA.sql         (table d'en-tete, 1 ligne par LNA_UID)
 --    4. LINE_VIS_GetNodesSuccessorsPredecessors.sql (procedure)
 --    5. LINE_VIS_EDG_bcp.cmd     (import d'un fichier .data)
 --    6. LINE_VIS_HEA_data.sql    (en-tetes de test, 1 par LNA_UID importe)
 --
---  Les fichiers .data n'ont que 13 champs : les colonnes de hash n'y
---  figurent pas, SQL Server les calcule a partir de DTA_1..DTA_4.
+--  Les fichiers .data n'ont que 13 champs : DTA_HASH n'y figure pas, SQL
+--  Server la calcule a partir de DTA_1..DTA_4.
 -- =============================================================================
 
 -- Options memorisees avec la table / l'index ; QUOTED_IDENTIFIER et
@@ -46,12 +46,6 @@ BEGIN
         -- 14e colonne : empreinte de DTA_1..DTA_4 (calculee, non persistee).
         -- Absente des fichiers .data : SQL Server la remplit seul.
         DTA_HASH    AS CHECKSUM(DTA_1, DTA_2, DTA_3, DTA_4),
-        -- Empreinte de chaque coordonnee seule : recherche quand une partie
-        -- des coordonnees est NULL (voir la procedure).
-        DTA_1_HASH  AS CHECKSUM(DTA_1),
-        DTA_2_HASH  AS CHECKSUM(DTA_2),
-        DTA_3_HASH  AS CHECKSUM(DTA_3),
-        DTA_4_HASH  AS CHECKSUM(DTA_4),
         CONSTRAINT PK_LINE_VIS_EDG PRIMARY KEY (LNA_UID, LIN_UID, EDG_DIR)
     )
 END
@@ -96,36 +90,17 @@ ELSE IF NOT EXISTS (
         WITH (DROP_EXISTING = ON, SORT_IN_TEMPDB = ON);
 GO
 
--- 3. Hash par coordonnee (DTA_1_HASH..DTA_4_HASH) : ajoutes a une table
---    creee avant cette version (colonnes calculees : aucune donnee a migrer).
-IF COL_LENGTH(N'dbo.LINE_VIS_EDG', N'DTA_1_HASH') IS NULL
-    ALTER TABLE dbo.LINE_VIS_EDG ADD
-        DTA_1_HASH AS CHECKSUM(DTA_1),
-        DTA_2_HASH AS CHECKSUM(DTA_2),
-        DTA_3_HASH AS CHECKSUM(DTA_3),
-        DTA_4_HASH AS CHECKSUM(DTA_4);
-GO
-
--- 4. Un index (EDG_DIR, DTA_n_HASH) par coordonnee. La procedure ne filtre
---    que sur les coordonnees connues du noeud ; SQL Server prend alors
---    l'index le plus selectif parmi celles-ci. Pourquoi un hash plutot que
---    la colonne : DTA_3 est un VARCHAR(8000), trop long pour une cle
---    d'index (1700 octets max) ; un INT de 4 octets garde les index etroits
---    (~400 Mo chacun pour 7,2 M lignes, mesure).
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH1'
-               AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
-    CREATE NONCLUSTERED INDEX IX_LINE_VIS_EDG_DIR_HASH1
-        ON dbo.LINE_VIS_EDG (EDG_DIR, DTA_1_HASH) WITH (SORT_IN_TEMPDB = ON);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH2'
-               AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
-    CREATE NONCLUSTERED INDEX IX_LINE_VIS_EDG_DIR_HASH2
-        ON dbo.LINE_VIS_EDG (EDG_DIR, DTA_2_HASH) WITH (SORT_IN_TEMPDB = ON);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH3'
-               AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
-    CREATE NONCLUSTERED INDEX IX_LINE_VIS_EDG_DIR_HASH3
-        ON dbo.LINE_VIS_EDG (EDG_DIR, DTA_3_HASH) WITH (SORT_IN_TEMPDB = ON);
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH4'
-               AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
-    CREATE NONCLUSTERED INDEX IX_LINE_VIS_EDG_DIR_HASH4
-        ON dbo.LINE_VIS_EDG (EDG_DIR, DTA_4_HASH) WITH (SORT_IN_TEMPDB = ON);
+-- 3. Nettoyage : une version precedente ajoutait un hash par coordonnee
+--    (DTA_1_HASH..DTA_4_HASH) et un index sur chacun. On ne garde que
+--    DTA_HASH : index puis colonnes supprimes s'ils existent.
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH1' AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
+    DROP INDEX IX_LINE_VIS_EDG_DIR_HASH1 ON dbo.LINE_VIS_EDG;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH2' AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
+    DROP INDEX IX_LINE_VIS_EDG_DIR_HASH2 ON dbo.LINE_VIS_EDG;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH3' AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
+    DROP INDEX IX_LINE_VIS_EDG_DIR_HASH3 ON dbo.LINE_VIS_EDG;
+IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LINE_VIS_EDG_DIR_HASH4' AND object_id = OBJECT_ID(N'dbo.LINE_VIS_EDG'))
+    DROP INDEX IX_LINE_VIS_EDG_DIR_HASH4 ON dbo.LINE_VIS_EDG;
+IF COL_LENGTH(N'dbo.LINE_VIS_EDG', N'DTA_1_HASH') IS NOT NULL
+    ALTER TABLE dbo.LINE_VIS_EDG DROP COLUMN DTA_1_HASH, DTA_2_HASH, DTA_3_HASH, DTA_4_HASH;
 GO
