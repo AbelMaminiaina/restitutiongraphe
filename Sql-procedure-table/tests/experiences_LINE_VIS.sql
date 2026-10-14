@@ -24,6 +24,7 @@
 --    Experience 3 : temps de reponse des procedures sur 7,2 M lignes
 --    Experience 4 : chargement de LINE_VIS_EDG par lots (journal)
 --    Experience 5 : controle qualite des donnees de lineage
+--    Experience 6 : origine des LNA_UID sans en-tete
 --
 --  Limite des donnees de test (a garder en tete pour lire les temps) :
 --  dans les 7,2 M lignes generees, un voisin (EDG_1..4) n'est jamais
@@ -379,5 +380,76 @@ PRINT 'Duree du controle qualite : ' + CAST(DATEDIFF(SECOND, @t, SYSDATETIME()) 
        conforme a l'ecart maximum annonce dans la procedure (~0,2 %).
      - NB_DISTINCTS de SYM_O_SANS_I = 3 599 999 pour 3 600 000 lignes : deux
        couples (noeud, voisin) differents ont la meme empreinte (collision).
+   ========================================================================== */
+GO
+
+/* =============================================================================
+   EXPERIENCE 6 : ORIGINE DES LNA_UID SANS EN-TETE (controle SANS_ENTETE)
+   =============================================================================
+   L'experience 5 trouve 900 000 lignes (30 000 LNA_UID) sans en-tete dans
+   LINE_VIS_HEA. Enquete (2026-10-15).
+   ========================================================================== */
+PRINT '=== EXPERIENCE 6 : origine des LNA_UID sans en-tete ===';
+
+-- 6a. LNA_UID sans en-tete : prefixes et plage de numeros
+SELECT LEFT(d.LNA_UID, LEN(d.LNA_UID) - 6) AS prefixe,
+       COUNT(*)                            AS nb_lna,
+       MIN(RIGHT(d.LNA_UID, 5))            AS num_min,
+       MAX(RIGHT(d.LNA_UID, 5))            AS num_max
+FROM (SELECT DISTINCT LNA_UID FROM dbo.LINE_VIS_EDG WITH (NOLOCK)) d
+WHERE NOT EXISTS (SELECT 1 FROM dbo.LINE_VIS_HEA h WHERE h.LNA_UID = d.LNA_UID)
+GROUP BY LEFT(d.LNA_UID, LEN(d.LNA_UID) - 6);
+/* Resultat : les 5 prefixes (ABC_LIS_PCE, ABN_HCL_VALINP, DEF_TRN_PROC,
+   GHI_DAT_LOAD, JKL_MIG_TOOL), 6 000 LNA_UID chacun, numeros 42000 a 47999. */
+
+-- 6b. En-tete : plage de numeros et date de generation
+--     (LINE_VIS_HEA_data.sql met LNA_TSP = date de generation - 0 a 47 h :
+--      le maximum est la date de generation)
+SELECT COUNT(*) AS nb_hea, MIN(RIGHT(LNA_UID, 5)) AS num_min,
+       MAX(RIGHT(LNA_UID, 5)) AS num_max, MAX(LNA_TSP) AS date_generation
+FROM dbo.LINE_VIS_HEA;
+/* Resultat : 210 000 en-tetes, numeros 00000 a 41999, generes le
+   2026-09-30 a 21:59. */
+
+-- 6c. Lignes de LINE_VIS_EDG : compteur c (nombre a la fin de LIN_UID)
+SELECT COUNT_BIG(*) AS nb_lignes, COUNT(DISTINCT LNA_UID) AS nb_lna,
+       MIN(CAST(RIGHT(LIN_UID, CHARINDEX('_', REVERSE(LIN_UID)) - 1) AS INT)) AS c_min,
+       MAX(CAST(RIGHT(LIN_UID, CHARINDEX('_', REVERSE(LIN_UID)) - 1) AS INT)) AS c_max
+FROM dbo.LINE_VIS_EDG WITH (NOLOCK);
+/* Resultat : 7 200 000 lignes, 240 000 LNA_UID, c de 1 a 7 200 000.
+
+   Constats (hors SQL) :
+     - LIN_UID sans suffixe "_n" (ex. CCTW_CTRCAR_1170001) et numeros
+       LNA_UID jusqu'a 47999 : aucune version du generateur SQL
+       (LINE_VIS_EDG_data.sql) ne produit cela. Les lignes viennent de
+       Sql-bcp-staging/LINE_VIS_EDG_8M.data (1re ligne du fichier =
+       ABC_LIS_PCE_00000 / CCTW_CTRCAR_1 / _5584833E..., retrouvee en base),
+       genere par LINE_VIS_EDG_2_STG_data.ps1 avec -NbLnaUid 240000
+       (formule : numero = (c % NbLnaUid) / 5 -> 0 a 47999).
+     - Le fichier date du 2026-10-09 21:04 ; l'en-tete du 2026-09-30 :
+       LINE_VIS_HEA_data.sql n'a pas ete relance apres l'import bcp.
+       L'en-tete est celui de l'ancien jeu (210 000 LNA_UID, 0 a 41999).
+     - Import incomplet : le fichier a 8 000 000 lignes (wc -l), la table
+       7 200 000 (c = 1 a 7 200 000, sans trou). Les lignes 7 200 001 a
+       8 000 000 du fichier sont normales. Cause non etablie : 7 200 000
+       = 72 lots bcp de 100 000 (arret au 73e lot ?) mais aussi
+       30 x 240 000 (import d'une version anterieure du fichier generee
+       avec -Lignes 7200000 ?). Le journal d'erreurs SQL Server ne remonte
+       qu'au 2026-10-11 et ne contient aucune erreur disque / journal plein.
+
+   CONCLUSION : 30 000 LNA_UID (numeros 42000 a 47999) n'ont pas d'en-tete
+   parce que l'en-tete a ete genere AVANT l'import bcp d'un fichier qui
+   utilise 240 000 LNA_UID au lieu de 210 000. Leurs 900 000 lignes sont
+   ignorees par toutes les procedures de lineage.
+
+   CORRECTION (2026-10-15) : LINE_VIS_HEA_manquants.sql (ajoute seulement
+   les en-tetes manquants, memes formules que LINE_VIS_HEA_data.sql) :
+     1er passage : 210 000 en-tetes avant, 30 000 ajoutes, 240 000 apres (10 s)
+     2e passage  : 0 ajoute (rejouable)
+     verification : 0 ligne de LINE_VIS_EDG sans en-tete ; journal inchange
+     (7 112 Mo, 0,41 % utilise).
+   -> Apres correction, SANS_ENTETE = 0 (l'experience 5 ci-dessus montre
+      l'etat AVANT correction : 12,5 %). Les requetes 6a a 6c relancees
+      aujourd'hui donnent : 6a vide, 6b 240 000 en-tetes (00000 a 47999).
    ========================================================================== */
 GO

@@ -21,6 +21,7 @@ Sql-procedure-table/
 ├── LINE_VIS_Chemin.sql                       # plus courts chemins entre deux nœuds
 ├── LINE_VIS_LineageTables.sql                # lineage table -> table
 ├── LINE_VIS_ControleQualite.sql              # contrôle qualité des données de lineage
+├── LINE_VIS_HEA_manquants.sql                # ajoute les en-têtes LINE_VIS_HEA manquants (après un rechargement)
 └── tests/
     ├── run_tests.sh                          # déploie tout dans une base jetable et lance les tests
     ├── experiences_LINE_VIS.sql              # toutes les mesures, avec leurs résultats en commentaire
@@ -170,6 +171,17 @@ n'y est stocké qu'une fois), **12,5 % `SANS_ENTETE`** (900 000 lignes,
 30 000 `LNA_UID`, ignorées par le lineage), 66,7 % `VOISIN_INCOMPLET` et
 ~100 % `VOISIN_FANTOME` (voulus par le générateur). Détail dans
 `tests/experiences_LINE_VIS.sql`, expérience 5.
+
+**`SANS_ENTETE` : origine et correction** (expérience 6). `LINE_VIS_EDG` a
+été rechargée par bcp (`Sql-bcp-staging/LINE_VIS_EDG_8M.data`, 240 000
+`LNA_UID`) sans relancer la génération de l'en-tête, restée à 210 000
+`LNA_UID`. Correction : `LINE_VIS_HEA_manquants.sql` ajoute seulement les
+en-têtes manquants (30 000, 10 s), sans toucher aux existants ;
+`SANS_ENTETE` est maintenant à 0. **Après chaque rechargement de
+`LINE_VIS_EDG`, lancer `LINE_VIS_HEA_manquants.sql`.**
+
+À noter : la table contient 7 200 000 lignes alors que le fichier en a
+8 000 000 (import incomplet, cause non établie).
 
 ## Lire et retravailler les résultats en SQL
 
