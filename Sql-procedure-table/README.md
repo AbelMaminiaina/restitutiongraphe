@@ -243,9 +243,11 @@ En mode `SIMPLE`, la place du journal est réutilisée dès qu'une transaction
 est validée : **la taille du journal ≈ la plus grosse transaction**. Règles :
 
 1. **Charger par lots**, jamais tout en une transaction. `LINE_VIS_EDG_bcp.cmd`
-   et `LINE_VIS_EDG_bcp.ps1` valident déjà tous les 100 000 lignes (`-b 100000`).
-   À l'inverse, `LINE_VIS_EDG_data.sql` (données de test) insère les 7 M lignes
-   en **une seule** transaction : c'est le scénario qui fait grossir le journal.
+   et `LINE_VIS_EDG_bcp.ps1` valident tous les 100 000 lignes (`-b 100000`) ;
+   `LINE_VIS_EDG_data.sql` (données de test) aussi : 70 lots de 100 000 lignes,
+   un `CHECKPOINT` après chaque lot. Mesuré sur une base vide : journal de
+   136 Mo pour 1 M lignes, 200 Mo pour 2 M lignes (l'ancienne version, en une
+   seule transaction, avait fait monter le journal à 7,1 Go pour 7 M lignes).
 2. **Désactiver l'index `IX_LINE_VIS_EDG_DIR_HASH` avant un gros chargement**
    et le reconstruire après : chaque ligne insérée met à jour l'index et
    ajoute au journal ; la reconstruction en mode `SIMPLE` est minimalement
