@@ -25,6 +25,7 @@
 --    Experience 4 : chargement de LINE_VIS_EDG par lots (journal)
 --    Experience 5 : controle qualite des donnees de lineage
 --    Experience 6 : origine des LNA_UID sans en-tete
+--    Experience 7 : graphe realiste (base RestitutionGrapheRealiste)
 --
 --  Limite des donnees de test (a garder en tete pour lire les temps) :
 --  dans les 7,2 M lignes generees, un voisin (EDG_1..4) n'est jamais
@@ -452,4 +453,175 @@ FROM dbo.LINE_VIS_EDG WITH (NOLOCK);
       l'etat AVANT correction : 12,5 %). Les requetes 6a a 6c relancees
       aujourd'hui donnent : 6a vide, 6b 240 000 en-tetes (00000 a 47999).
    ========================================================================== */
+GO
+
+/* =============================================================================
+   EXPERIENCE 7 : GRAPHE REALISTE (base RestitutionGrapheRealiste)
+   =============================================================================
+   Les donnees de RestitutionGrapheProd n'ont qu'un niveau, une seule table
+   et des liens stockes d'un seul cote. LINE_VIS_Graphe_Realiste_data.sql
+   genere un systeme d'information plausible dans une base dediee :
+   30 applications, 6 couches SRC -> STG -> ODS -> DWH -> DM -> RPT,
+   8 referentiels communs, flux inter-applications, 10 executions par
+   programme (v1 puis v2), liens stockes des deux cotes, et des anomalies
+   VOLONTAIRES dont le nombre exact est affiche a la fin.
+
+   Generation (bash, depuis Sql-procedure-table/, ~20 s) :
+       SERVER='.\SQLEXPRESS01' bash graphe_realiste.sh
+
+   Bilan du generateur (2026-10-15, parametres par defaut, graine 42) :
+     1 088 tables (dont 8 referentiels), 24 029 colonnes, 900 programmes,
+     25 961 liens colonne -> colonne (830 retires et 840 ajoutes en v2,
+     10 flux de retour), 71 programmes lisant une autre application,
+     578 liens entre environnements differents, 9 000 executions.
+     LINE_VIS_EDG : 500 849 lignes (251 260 'O', 249 095 'I', 494 doublons) ;
+     LINE_VIS_HEA : 8 954 en-tetes. Duree : 13 s (19 s avec le deploiement).
+
+   Les requetes ci-dessous visent la base par son nom (3 parties) : elles
+   ne font rien si elle n'existe pas.
+   ========================================================================== */
+PRINT '=== EXPERIENCE 7 : graphe realiste ===';
+
+IF DB_ID(N'RestitutionGrapheRealiste') IS NULL
+    PRINT 'Base RestitutionGrapheRealiste absente : lancer graphe_realiste.sh.';
+ELSE
+BEGIN
+    -- 7a. Controle qualite : doit retrouver EXACTEMENT les anomalies placees
+    EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_ControleQualite @p_sortie = 'S';
+END
+/* Resultat 7a (7 s) - controle qualite contre anomalies placees :
+
+     CONTROLE        Place par le generateur   Trouve par le controle
+     SYM_O_SANS_I    2 166                     2 166  (226 liens)
+     SYM_I_SANS_O    0                         0
+     SANS_ENTETE     2 578 lignes, 46 exe.     2 578, 46 LNA_UID
+     DOUBLON         494                       494
+     4 autres        0                         0
+     VOISIN_FANTOME  (non place)               490 lignes, 51 colonnes
+   -> Le controle qualite retrouve exactement chaque anomalie placee.
+   -> VOISIN_FANTOME : colonnes de fin de chaine (rapports...) alimentees
+      seulement par des liens asymetriques : sans ligne 'I' chez elles,
+      elles ne sont jamais noeud. Effet attendu des liens asymetriques. */
+GO
+
+IF DB_ID(N'RestitutionGrapheRealiste') IS NOT NULL
+BEGIN
+    SET NOCOUNT ON;
+
+    -- 7b. Temps de reponse sur le graphe a plusieurs niveaux.
+    -- Points de depart : une colonne SRC (aval), une colonne RPT (amont),
+    -- une colonne de referentiel (noeud pivot), une table SRC, une table DWH.
+    DECLARE @s1 VARCHAR(200), @s2 VARCHAR(500), @r1 VARCHAR(200), @r2 VARCHAR(500),
+            @f1 VARCHAR(200), @f2 VARCHAR(500), @c1 VARCHAR(200), @c2 VARCHAR(500), @c3 CHAR(1);
+    DECLARE @tSrc VARCHAR(1000), @sSrc VARCHAR(8000), @eSrc VARCHAR(1000),
+            @tDwh VARCHAR(1000), @sDwh VARCHAR(8000), @eDwh VARCHAR(1000);
+
+    SELECT TOP (1) @s1 = LNA_UID, @s2 = LIN_UID, @tSrc = DTA_2, @sSrc = DTA_3, @eSrc = DTA_4
+    FROM RestitutionGrapheRealiste.dbo.LINE_VIS_EDG
+    WHERE EDG_DIR = 'O' AND DTA_2 LIKE 'SRC[_]%' AND DTA_4 = 'PROD' ORDER BY LNA_UID, LIN_UID;
+    SELECT TOP (1) @r1 = LNA_UID, @r2 = LIN_UID
+    FROM RestitutionGrapheRealiste.dbo.LINE_VIS_EDG
+    WHERE EDG_DIR = 'I' AND DTA_2 LIKE 'RPT[_]%' AND DTA_4 = 'PROD' ORDER BY LNA_UID, LIN_UID;
+    SELECT TOP (1) @f1 = LNA_UID, @f2 = LIN_UID
+    FROM RestitutionGrapheRealiste.dbo.LINE_VIS_EDG
+    WHERE EDG_DIR = 'O' AND DTA_2 LIKE 'REF[_]%' ORDER BY LNA_UID, LIN_UID;
+    SELECT TOP (1) @tDwh = DTA_2, @sDwh = DTA_3, @eDwh = DTA_4
+    FROM RestitutionGrapheRealiste.dbo.LINE_VIS_EDG
+    WHERE DTA_2 LIKE 'DWH[_]%' AND DTA_4 = 'PROD' ORDER BY LNA_UID, LIN_UID;
+
+    DECLARE @mes TABLE (CAS VARCHAR(60), RUN INT, MS INT, INFO VARCHAR(200));
+    DECLARE @nod TABLE (NOD_ID INT, NIVEAU INT, SENS CHAR(1), DTA_1 VARCHAR(1000), DTA_2 VARCHAR(1000),
+                        DTA_3 VARCHAR(8000), DTA_4 VARCHAR(1000), NOM_NOEUD VARCHAR(MAX), EXPLORE BIT, TRONQUE BIT);
+    DECLARE @imp TABLE (NOEUD_TROUVE BIT, NB_NOEUDS INT, NB_TABLES INT, NB_SCHEMAS INT, NB_ENVIRONNEMENTS INT,
+                        NB_APPLICATIONS INT, NB_PROGRAMMES INT, NB_EXECUTIONS INT, PROFONDEUR INT, TRONQUE BIT);
+    DECLARE @che TABLE (SRC_TROUVE BIT, DST_TROUVE BIT, CHEMIN_TROUVE BIT, LONGUEUR INT, NB_CHEMINS BIGINT,
+                        NB_NOEUDS_PARCOURUS INT, TRONQUE BIT);
+    DECLARE @tab TABLE (TAB_ID INT, NIVEAU INT, SENS CHAR(1), DTA_4 VARCHAR(1000), DTA_3 VARCHAR(8000),
+                        DTA_2 VARCHAR(1000), NOM_TABLE VARCHAR(MAX), NB_COLONNES INT, TRONQUE BIT);
+
+    DECLARE @r INT = 1, @t DATETIME2;
+    WHILE @r <= 3
+    BEGIN
+        DELETE FROM @nod; SET @t = SYSDATETIME();
+        INSERT INTO @nod EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Lineage @s1, @s2, 'O',
+             @p_sens = 'O', @p_profondeur = 10, @p_maxnoeuds = 5000, @p_sortie = 'N';
+        INSERT INTO @mes SELECT 'Lineage aval depuis colonne SRC', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(COUNT(*), ' noeuds, niveau max ', MAX(NIVEAU)) FROM @nod;
+
+        -- cible de Chemin : la colonne la plus loin dans cet aval
+        IF @r = 1
+            SELECT TOP (1) @c1 = e.LNA_UID, @c2 = e.LIN_UID, @c3 = e.EDG_DIR
+            FROM @nod n
+            INNER JOIN RestitutionGrapheRealiste.dbo.LINE_VIS_EDG e
+                    ON e.DTA_1 = n.DTA_1 AND e.DTA_2 = n.DTA_2 AND e.DTA_3 = n.DTA_3 AND e.DTA_4 = n.DTA_4
+            ORDER BY n.NIVEAU DESC, n.NOD_ID;
+
+        DELETE FROM @nod; SET @t = SYSDATETIME();
+        INSERT INTO @nod EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Lineage @r1, @r2, 'I',
+             @p_sens = 'I', @p_profondeur = 10, @p_maxnoeuds = 5000, @p_sortie = 'N';
+        INSERT INTO @mes SELECT 'Lineage amont depuis colonne RPT', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(COUNT(*), ' noeuds, niveau max ', MAX(NIVEAU)) FROM @nod;
+
+        DELETE FROM @imp; SET @t = SYSDATETIME();
+        INSERT INTO @imp EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Impact @s1, @s2, 'O', @p_sortie = 'R';
+        INSERT INTO @mes SELECT 'Impact depuis colonne SRC', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(NB_NOEUDS, ' col., ', NB_TABLES, ' tables, ', NB_APPLICATIONS, ' applis, ',
+                   NB_PROGRAMMES, ' pgm, prof. ', PROFONDEUR) FROM @imp;
+
+        DELETE FROM @imp; SET @t = SYSDATETIME();
+        INSERT INTO @imp EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Impact @f1, @f2, 'O', @p_sortie = 'R';
+        INSERT INTO @mes SELECT 'Impact depuis colonne de referentiel', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(NB_NOEUDS, ' col., ', NB_TABLES, ' tables, ', NB_APPLICATIONS, ' applis, ',
+                   NB_PROGRAMMES, ' pgm, prof. ', PROFONDEUR) FROM @imp;
+
+        DELETE FROM @che; SET @t = SYSDATETIME();
+        INSERT INTO @che EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Chemin @s1, @s2, 'O', @c1, @c2, @c3, @p_sortie = 'R';
+        INSERT INTO @mes SELECT 'Chemin colonne SRC -> colonne la plus loin', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT('trouve ', CAST(CHEMIN_TROUVE AS INT), ', longueur ', LONGUEUR, ', ',
+                   NB_CHEMINS, ' chemin(s), ', NB_NOEUDS_PARCOURUS, ' noeuds lus') FROM @che;
+
+        DELETE FROM @tab; SET @t = SYSDATETIME();
+        INSERT INTO @tab EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_LineageTables @tSrc, @sSrc, @eSrc,
+             @p_sens = 'O', @p_profondeur = 10, @p_sortie = 'N';
+        INSERT INTO @mes SELECT 'LineageTables aval depuis table SRC', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(COUNT(*), ' tables, niveau max ', MAX(NIVEAU)) FROM @tab;
+
+        DELETE FROM @tab; SET @t = SYSDATETIME();
+        INSERT INTO @tab EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_LineageTables @tDwh, @sDwh, @eDwh,
+             @p_sens = 'B', @p_profondeur = 10, @p_sortie = 'N';
+        INSERT INTO @mes SELECT 'LineageTables deux sens depuis table DWH', @r, DATEDIFF(ms, @t, SYSDATETIME()),
+            CONCAT(COUNT(*), ' tables, niveau max ', MAX(NIVEAU)) FROM @tab;
+
+        SET @r += 1;
+    END
+
+    SELECT CAS,
+           MAX(CASE WHEN RUN = 1 THEN MS END)   AS PREMIER_MS,
+           AVG(CASE WHEN RUN > 1 THEN MS END)   AS MOYEN_MS,
+           MAX(CASE WHEN RUN = 3 THEN INFO END) AS RESULTAT
+    FROM @mes
+    GROUP BY CAS
+    ORDER BY CAS;
+END
+/* Resultat 7b (2026-10-15) :
+     CAS                                          1er appel  moyenne  resultat
+     Chemin colonne SRC -> colonne la plus loin     150 ms   109 ms   trouve, longueur 3, 1 chemin, 7 noeuds lus
+     Impact depuis colonne de referentiel           426 ms   281 ms   290 col., 126 tables, 20 applis, 126 pgm, prof. 5
+     Impact depuis colonne SRC                      128 ms   134 ms   6 col., 3 tables, 2 applis, 3 pgm, prof. 3
+     Lineage amont depuis colonne RPT                38 ms    45 ms   3 noeuds, niveau max 2
+     Lineage aval depuis colonne SRC               1103 ms    81 ms   7 noeuds, niveau max 3
+     LineageTables aval depuis table SRC            296 ms   282 ms   22 tables, niveau max 5
+     LineageTables deux sens depuis table DWH       197 ms   111 ms   15 tables, niveau max 3
+
+   Lecture :
+     - Le lineage traverse enfin plusieurs couches : 5 niveaux de tables
+       depuis une table SRC, 290 colonnes / 20 applications touchees par une
+       colonne de referentiel (le cas le plus lourd : ~0,3 s).
+     - LineageTables : 0,1 a 0,3 s ici, contre ~5 s sur RestitutionGrapheProd :
+       la lecture complete de la table pour trouver les colonnes de depart
+       porte sur 0,5 M lignes au lieu de 7,2 M.
+     - Toutes les procedures restent sous 0,5 s une fois le plan en cache.
+       Un 2e passage complet donne des moyennes un peu differentes (ex.
+       Impact referentiel 499 ms, Lineage amont RPT 165 ms) : a cette
+       echelle, le bruit de la machine compte autant que la requete. */
 GO

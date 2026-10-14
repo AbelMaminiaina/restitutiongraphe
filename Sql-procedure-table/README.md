@@ -22,6 +22,8 @@ Sql-procedure-table/
 ├── LINE_VIS_LineageTables.sql                # lineage table -> table
 ├── LINE_VIS_ControleQualite.sql              # contrôle qualité des données de lineage
 ├── LINE_VIS_HEA_manquants.sql                # ajoute les en-têtes LINE_VIS_HEA manquants (après un rechargement)
+├── LINE_VIS_Graphe_Realiste_data.sql         # générateur de graphe réaliste (base RestitutionGrapheRealiste)
+├── graphe_realiste.sh                        # crée la base, déploie tout, lance le générateur
 └── tests/
     ├── run_tests.sh                          # déploie tout dans une base jetable et lance les tests
     ├── experiences_LINE_VIS.sql              # toutes les mesures, avec leurs résultats en commentaire
@@ -182,6 +184,36 @@ en-têtes manquants (30 000, 10 s), sans toucher aux existants ;
 
 À noter : la table contient 7 200 000 lignes alors que le fichier en a
 8 000 000 (import incomplet, cause non établie).
+
+## Graphe réaliste pour tester — `RestitutionGrapheRealiste`
+
+Les données de `RestitutionGrapheProd` ne permettent pas de tester le
+lineage : un seul niveau, une seule table (`ZJ`), liens stockés d'un seul
+côté. `LINE_VIS_Graphe_Realiste_data.sql` génère un système d'information
+plausible dans une **base dédiée** (rien n'est touché dans
+`RestitutionGrapheProd`) :
+
+```bash
+SERVER='.\SQLEXPRESS01' bash graphe_realiste.sh     # ~20 s : base + tables + procédures + données
+```
+
+| Élément | Par défaut |
+|---|---|
+| Applications | 30 (`A001`…), surtout en PROD, quelques-unes en RECETTE / DEV |
+| Couches | `SRC` → `STG` → `ODS` → `DWH` → `DM` → `RPT`, réparties sur les tables de chaque application |
+| Tables / colonnes | 1 088 tables (dont 8 référentiels communs `REF_*`), 24 029 colonnes aux noms métier |
+| Programmes | 900 (un par table alimentée), sources : couche précédente, référentiel (40 %), autre application (10 %) |
+| Liens | 25 961 colonne → colonne, la colonne de même rang se propage de couche en couche ; 10 flux de retour DM/RPT → STG |
+| Exécutions | 10 par programme (une par jour), v1.0 puis v2.0 (~3 % de liens retirés, ~3 % ajoutés) |
+| Volume | ~500 000 lignes dans `LINE_VIS_EDG` (~300 Mo), chaque lien stocké des deux côtés (`O` et `I`, même `LIN_UID`) |
+| Anomalies volontaires | 1 % de liens sans ligne `I`, 0,5 % d'exécutions sans en-tête, 0,2 % de lignes en double |
+
+Le générateur affiche à la fin le nombre **exact** d'anomalies placées :
+`LINE_VIS_ControleQualite` les retrouve toutes (expérience 7). Les
+résultats sont reproductibles (graine fixe) ; la taille se règle dans la
+section « Paramètres » du script (~7 M lignes avec `@NbApps = 100`,
+`@Executions = 40`). Temps des procédures sur ce graphe : 0,1 à 0,5 s
+(Lineage, Impact, Chemin, LineageTables), contrôle qualité 7 s.
 
 ## Lire et retravailler les résultats en SQL
 
