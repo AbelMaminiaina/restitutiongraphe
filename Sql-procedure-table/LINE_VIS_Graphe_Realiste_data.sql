@@ -202,8 +202,9 @@ CREATE INDEX IX_col_tab ON #col (TAB_ID, ORDINAL);
 /* 5. Programmes : un par table alimentee (hors SRC et referentiels) */
 CREATE TABLE #prog (PGM_ID INT PRIMARY KEY, APP_ID INT, COUCHE INT, NOM VARCHAR(120), TECHNO VARCHAR(20));
 INSERT INTO #prog
-SELECT t.TAB_ID, t.APP_ID, t.COUCHE, 'JOB_' + t.TABLE_NOM, te.NOM
+SELECT t.TAB_ID, t.APP_ID, t.COUCHE, 'JOB_' + a.RON_APP + '_' + t.TABLE_NOM, te.NOM
 FROM #tab t
+INNER JOIN #app a ON a.APP_ID = t.APP_ID   -- nom unique : 2 applications peuvent avoir une table de meme nom
 INNER JOIN @techno te ON te.N = dbo.GEN_H(@Graine, 'techno', t.TAB_ID, 0) % 4
 WHERE t.COUCHE > 0 AND t.EST_REF = 0;
 

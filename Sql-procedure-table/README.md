@@ -21,6 +21,7 @@ Sql-procedure-table/
 ├── LINE_VIS_Chemin.sql                       # plus courts chemins entre deux nœuds
 ├── LINE_VIS_LineageTables.sql                # lineage table -> table
 ├── LINE_VIS_ControleQualite.sql              # contrôle qualité des données de lineage
+├── LINE_VIS_Statistiques.sql                 # statistiques globales du graphe
 ├── LINE_VIS_HEA_manquants.sql                # ajoute les en-têtes LINE_VIS_HEA manquants (après un rechargement)
 ├── LINE_VIS_Graphe_Realiste_data.sql         # générateur de graphe réaliste (base RestitutionGrapheRealiste)
 ├── graphe_realiste.sh                        # crée la base, déploie tout, lance le générateur
@@ -185,6 +186,40 @@ en-têtes manquants (30 000, 10 s), sans toucher aux existants ;
 À noter : la table contient 7 200 000 lignes alors que le fichier en a
 8 000 000 (import incomplet, cause non établie).
 
+## `LINE_VIS_Statistiques` — statistiques globales du graphe
+
+« À quoi ressemble le lineage dans son ensemble ? »
+
+```sql
+EXEC dbo.LINE_VIS_Statistiques @p_top = 20;   -- 8 s sur le graphe réaliste (0,5 M lignes)
+```
+
+| Jeu de résultats (`@p_sortie`) | Contenu |
+|---|---|
+| 1. `RESUME` | 17 indicateurs : colonnes, tables, liens, **sources** (rien en amont), **sorties** (rien en aval), profondeur, tables dans un cycle, applications, programmes, flux entre applications, liens entre environnements, liens non PROD → PROD |
+| 2. `COLONNES` | les `@p_top` colonnes **pivots** (le plus de colonnes en amont + en aval), avec `NB_AMONT`, `NB_AVAL`, `TYPE` (SOURCE / SORTIE / INTERMEDIAIRE) |
+| 3. `TABLES` | les `@p_top` tables pivots, avec `NB_TABLES_AMONT`, `NB_TABLES_AVAL`, `NB_COLONNES`, `NIVEAU` (distance depuis une table source), `TYPE` |
+| 4. `APPLIS` | flux entre applications : `APP_SOURCE` écrit une table que `APP_CIBLE` lit (`NB_TABLES`, `NB_LIENS`) |
+| 5. `ENV` | liens par couple d'environnements ; `ANOMALIE` = d'un environnement non PROD vers PROD |
+| 6. `CYCLES` | tables prises dans un cycle et taille du cycle |
+
+Mêmes règles que le lineage : seules les lignes avec en-tête et voisin
+renseigné comptent, chaque lien est ramené au sens du flux et compté une
+fois. Une lecture de la table, empreintes `CHECKSUM` dans tempdb, rien
+d'écrit dans la base. Les calculs au niveau table sont sautés au-delà de
+`@p_max_tables` tables (100 000 par défaut) : c'est le cas de
+`RestitutionGrapheProd`, dont le schéma `DTA_3` est aléatoire (chaque ligne
+y est une « table ») : 199 s sur ses 7,2 M lignes, niveau table signalé
+« non calculé ». Limite : le nom d'une colonne pivot est cherché par
+l'index de hash (`DTA_1..4`) ; une colonne qui n'existe que comme voisin
+(`EDG_1..4`) s'affiche sans nom.
+
+Sur le graphe réaliste (expérience 8) : 1 055 tables sur 5 niveaux,
+170 tables sources, 228 de sortie ; les 8 référentiels sont les pivots
+(jusqu'à 56 tables en aval) ; 81 flux entre applications ; 26 liens
+RECETTE / DEV → PROD signalés ; 43 tables dans des cycles (le plus grand :
+17 tables sur 3 applications, créé par les flux de retour).
+
 ## Graphe réaliste pour tester — `RestitutionGrapheRealiste`
 
 Les données de `RestitutionGrapheProd` ne permettent pas de tester le
@@ -228,6 +263,7 @@ Pour filtrer, trier ou joindre un résultat, demander **un seul** jeu avec
 | `LINE_VIS_Chemin` | `T` tout · `R` résumé · `N` nœuds · `A` arêtes |
 | `LINE_VIS_LineageTables` | `T` tout · `N` tables · `A` liens |
 | `LINE_VIS_ControleQualite` | `T` tout · `S` synthèse · `E` exemples |
+| `LINE_VIS_Statistiques` | `TOUT` · `RESUME` · `COLONNES` · `TABLES` · `APPLIS` · `ENV` · `CYCLES` |
 
 ```sql
 DECLARE @pgm TABLE (
@@ -288,6 +324,7 @@ sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Impact.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Chemin.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_LineageTables.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_ControleQualite.sql
+sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Statistiques.sql
 ```
 
 `-I` est obligatoire (`QUOTED_IDENTIFIER ON`) : sans lui, la procédure ne

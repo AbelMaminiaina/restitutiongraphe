@@ -26,6 +26,7 @@
 --    Experience 5 : controle qualite des donnees de lineage
 --    Experience 6 : origine des LNA_UID sans en-tete
 --    Experience 7 : graphe realiste (base RestitutionGrapheRealiste)
+--    Experience 8 : statistiques globales du graphe
 --
 --  Limite des donnees de test (a garder en tete pour lire les temps) :
 --  dans les 7,2 M lignes generees, un voisin (EDG_1..4) n'est jamais
@@ -50,8 +51,10 @@ GO
 
        SERVER='.\SQLEXPRESS01' bash tests/run_tests.sh
 
-   Resultats (2026-10-15, apres ajout du controle qualite) : TOUS LES TESTS
-   PASSENT, 103 verifications, 16,6 s au total dont 4,2 s de deploiement.
+   Resultats (2026-10-15, apres ajout des statistiques) : TOUS LES TESTS
+   PASSENT, 112 verifications (9 fichiers ; test_LINE_VIS_Statistiques.sql :
+   9 verifications). Detail par fichier mesure avant les statistiques :
+   103 verifications, 16,6 s au total dont 4,2 s de deploiement.
 
      Fichier de test                                    Verif.  Duree
      ------------------------------------------------   ------  -----
@@ -625,3 +628,68 @@ END
        Impact referentiel 499 ms, Lineage amont RPT 165 ms) : a cette
        echelle, le bruit de la machine compte autant que la requete. */
 GO
+
+/* =============================================================================
+   EXPERIENCE 8 : STATISTIQUES GLOBALES DU GRAPHE (LINE_VIS_Statistiques)
+   =============================================================================
+   Une lecture de LINE_VIS_EDG, empreintes dans tempdb. 6 jeux de resultats :
+   resume, colonnes pivots, tables pivots, flux entre applications, flux
+   entre environnements, cycles. Ici : le resume (RESUME) sur le graphe
+   realiste ; la version complete se lance avec @p_sortie = 'TOUT'.
+   ========================================================================== */
+PRINT '=== EXPERIENCE 8 : statistiques globales ===';
+
+IF DB_ID(N'RestitutionGrapheRealiste') IS NULL
+    PRINT 'Base RestitutionGrapheRealiste absente : lancer graphe_realiste.sh.';
+ELSE
+    EXEC RestitutionGrapheRealiste.dbo.LINE_VIS_Statistiques @p_sortie = 'RESUME';
+/* Resultat 8a - graphe realiste, 0,5 M lignes, 8 s (2026-10-15) :
+
+     Lignes LINE_VIS_EDG           500 849
+     Lignes comptees               498 271   (avec en-tete et voisin renseigne)
+     Colonnes                       22 235   dont 2 364 sources, 10 725 de sortie
+     Liens colonne -> colonne       25 961   (= liens generes)
+     Tables                          1 055   dont 170 sources, 228 de sortie
+     Liens table -> table            2 263
+     Profondeur (tables)                 5   (SRC -> ... -> RPT)
+     Tables dans un cycle               43
+     Applications / programmes      30 / 900
+     Flux entre applications            81
+     Liens entre environnements        578   (= generes)
+     Liens non PROD -> PROD             26   (14 RECETTE -> PROD, 12 DEV -> PROD)
+
+   Autres jeux de resultats (@p_sortie = 'TOUT', @p_top = 8) :
+     - colonnes pivots : toutes dans les referentiels (REF_CANAL.MNT_SOLDE :
+       116 colonnes en aval) ; tables pivots : les 8 REF_* (REF_PAYS : 56
+       tables en aval) -> les noeuds a surveiller en priorite ;
+     - flux applis : A017 -> A027 (2 tables, 54 liens) en tete ;
+     - cycles : 43 tables, le plus grand de 17 tables sur les applications
+       A005, A017, A027 (flux de retour DM -> STG combines aux flux
+       inter-applications), puis cycles de 9, 5 et 4 tables.
+
+   Correction du generateur trouvee grace a cette experience : 467 noms de
+   programmes distincts pour 900 programmes (nom = 'JOB_' + table, et 2
+   applications peuvent avoir une table de meme nom) -> le nom contient
+   maintenant le code application ('JOB_A001_...') : 900 programmes. */
+GO
+
+/* 8b - RestitutionGrapheProd (7,2 M lignes), non relance ici (~200 s) :
+       EXEC RestitutionGrapheProd.dbo.LINE_VIS_Statistiques @p_top = 5;
+
+   1er essai : arrete apres 146 s, tempdb a 1,5 Go et en croissance sur un
+   disque plein a 99 % : le calcul des flux entre applications joignait
+   7 M "tables" (DTA_3 aleatoire -> chaque ligne est une table). Correction :
+   ce calcul est lui aussi saute au-dela de @p_max_tables tables.
+
+   2e essai : 199 s, termine.
+     Lignes comptees 7 200 000 ; colonnes 11 983 944 (5 987 719 sources,
+     5 987 680 de sortie) ; liens colonne 7 199 999 ; tables 11 967 353 ->
+     niveau table, cycles et flux applis "non calcule" (signale dans le
+     resume) ; applications 1 000 ; programmes 240 000.
+   Lecture : sur ces donnees, les statistiques confirment le controle
+   qualite (presque chaque colonne n'a qu'un lien) ; DTA_4 n'y est pas un
+   environnement (valeurs 'xDI_...'), d'ou 7 199 999 "liens entre
+   environnements" et 3 000 lignes dans le jeu ENV : sans signification ici.
+   Colonnes pivots sans nom (NULL) : ces noeuds n'existent que comme voisins
+   (EDG_1..4), le nom est cherche par l'index de hash, qui ne porte que sur
+   DTA_1..4. */
