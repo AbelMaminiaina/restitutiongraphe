@@ -144,13 +144,16 @@ BEGIN
     )
 
     /* 1. Noeud de depart (niveau 0), lu par la cle primaire.
-          Introuvable -> #noeuds reste vide, la boucle ne fait rien. */
-    INSERT INTO #noeuds (NOD_HASH, DTA_1, DTA_2, DTA_3, DTA_4, NIVEAU, SENS)
-    SELECT TOP (1) e.DTA_HASH, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4, 0, '-'
-    FROM dbo.LINE_VIS_EDG e WITH (NOLOCK)
-    WHERE e.LNA_UID = @p_lnauid
-      AND e.LIN_UID = @p_linuid
-      AND e.EDG_DIR = @p_edgdir
+          Introuvable -> #noeuds reste vide, la boucle ne fait rien.
+          @p_lnauid NULL : l'appelant a deja mis le ou les noeuds de depart
+          dans #noeuds (NIVEAU 0, SENS '-') ; cf. LINE_VIS_LineageTables. */
+    IF @p_lnauid IS NOT NULL
+        INSERT INTO #noeuds (NOD_HASH, DTA_1, DTA_2, DTA_3, DTA_4, NIVEAU, SENS)
+        SELECT TOP (1) e.DTA_HASH, e.DTA_1, e.DTA_2, e.DTA_3, e.DTA_4, 0, '-'
+        FROM dbo.LINE_VIS_EDG e WITH (NOLOCK)
+        WHERE e.LNA_UID = @p_lnauid
+          AND e.LIN_UID = @p_linuid
+          AND e.EDG_DIR = @p_edgdir
 
     DECLARE @niveau INT = 0
     DECLARE @reste  INT
