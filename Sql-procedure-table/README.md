@@ -6,7 +6,7 @@ directement en SQL (SSMS, sqlcmd) : aucune application n'est nécessaire.
 
 Ce document décrit les fonctionnalités de **lineage multi-niveaux** :
 `LINE_VIS_Lineage`, `LINE_VIS_Impact`, `LINE_VIS_Chemin`,
-`LINE_VIS_LineageTables`. Les procédures plus anciennes (`LINE_VIS_NodesList`,
+`LINE_VIS_LineageTables`, et le **contrôle qualité** `LINE_VIS_ControleQualite`. Les procédures plus anciennes (`LINE_VIS_NodesList`,
 `LINE_VIS_NodeById`, `LINE_VIS_GetNodesSuccessorsPredecessors`) sont décrites
 dans l'en-tête de leur fichier.
 
@@ -20,8 +20,10 @@ Sql-procedure-table/
 ├── LINE_VIS_Impact.sql                       # analyse d'impact
 ├── LINE_VIS_Chemin.sql                       # plus courts chemins entre deux nœuds
 ├── LINE_VIS_LineageTables.sql                # lineage table -> table
+├── LINE_VIS_ControleQualite.sql              # contrôle qualité des données de lineage
 └── tests/
     ├── run_tests.sh                          # déploie tout dans une base jetable et lance les tests
+    ├── experiences_LINE_VIS.sql              # toutes les mesures, avec leurs résultats en commentaire
     └── test_LINE_VIS_*.sql                   # un fichier de test par procédure
 ```
 
@@ -134,6 +136,41 @@ que la colonne `a` de T2 et que seule la colonne `b` de T2 alimente T3, T3
 n'apparaît pas en aval de T1. Les liens d'une table vers elle-même ne sont pas
 affichés.
 
+## `LINE_VIS_ControleQualite` — contrôle qualité des données
+
+« Les données de lineage sont-elles fiables ? »
+
+```sql
+EXEC dbo.LINE_VIS_ControleQualite @p_exemples = 5;   -- ~2 min 40 sur 7,2 M lignes
+```
+
+| Jeu de résultats | Colonnes |
+|---|---|
+| 1. Synthèse (1 ligne par contrôle) | `ORDRE`, `CONTROLE`, `DESCRIPTION`, `NB_LIGNES`, `NB_DISTINCTS`, `NB_LIGNES_TOTAL`, `POURCENT`, `STATUT` (`OK` / `ANOMALIE`) |
+| 2. Exemples | `CONTROLE`, `LNA_UID`, `LIN_UID`, `EDG_DIR`, `DTA_1..4`, `EDG_1..4` (au plus `@p_exemples` par contrôle) |
+
+| Contrôle | Anomalie cherchée | Conséquence |
+|---|---|---|
+| `SYM_O_SANS_I` / `SYM_I_SANS_O` | lien `A -O-> B` sans la ligne inverse `B -I-> A` (et l'inverse) | Proches de 0 % : chaque lien est stocké des deux côtés, cohérent avec « `O` = successeur, `I` = prédécesseur ». Proches de 100 % : un lien = une seule ligne. |
+| `SANS_ENTETE` | `LNA_UID` absent de `LINE_VIS_HEA` | ces lignes sont **ignorées** par toutes les procédures de lineage |
+| `ENTETE_INUTILISEE` | en-tête sans aucune ligne dans `LINE_VIS_EDG` | programme déclaré mais sans lineage capturé |
+| `VOISIN_VIDE` | `EDG_1..4` tous vides | la ligne ne mène nulle part |
+| `VOISIN_INCOMPLET` / `NOEUD_INCOMPLET` | une partie de `EDG_n` / `DTA_n` vide | identification partielle de la colonne |
+| `VOISIN_FANTOME` | voisin qui n'est le nœud d'aucune ligne | le lineage s'arrête là (erreur de capture ou vraie sortie finale) |
+| `DOUBLON` | même lien plusieurs fois pour le même programme | `NB_LIENS` gonflés |
+
+La table est lue **une seule fois** ; les contrôles travaillent ensuite sur
+des empreintes `CHECKSUM` dans tempdb (~250 Mo pour 7,2 M lignes). Une
+anomalie signalée est toujours réelle ; une collision d'empreintes peut en
+cacher quelques-unes : les nombres sont des minimums (écart ≤ 0,2 %, mesuré
+à 0,15 % sur `VOISIN_FANTOME`).
+
+Résultat sur les données de test (2026-10-15) : 100 % `SYM_*` (chaque lien
+n'y est stocké qu'une fois), **12,5 % `SANS_ENTETE`** (900 000 lignes,
+30 000 `LNA_UID`, ignorées par le lineage), 66,7 % `VOISIN_INCOMPLET` et
+~100 % `VOISIN_FANTOME` (voulus par le générateur). Détail dans
+`tests/experiences_LINE_VIS.sql`, expérience 5.
+
 ## Lire et retravailler les résultats en SQL
 
 Dans SSMS, un appel affiche tous ses jeux de résultats l'un sous l'autre.
@@ -146,6 +183,7 @@ Pour filtrer, trier ou joindre un résultat, demander **un seul** jeu avec
 | `LINE_VIS_Impact` | `T` tout · `R` résumé · `O` tables · `P` programmes |
 | `LINE_VIS_Chemin` | `T` tout · `R` résumé · `N` nœuds · `A` arêtes |
 | `LINE_VIS_LineageTables` | `T` tout · `N` tables · `A` liens |
+| `LINE_VIS_ControleQualite` | `T` tout · `S` synthèse · `E` exemples |
 
 ```sql
 DECLARE @pgm TABLE (
@@ -181,7 +219,8 @@ Temps mesurés sur 7,2 M lignes (SQL Server 2022 Express) :
 | `LINE_VIS_Lineage` | 30 à 50 ms |
 | `LINE_VIS_Impact` | ~50 ms |
 | `LINE_VIS_Chemin` | ~10 ms |
-| `LINE_VIS_LineageTables` (table + schéma + env.) | 8 à 14 s |
+| `LINE_VIS_LineageTables` (table + schéma + env.) | 5 à 14 s |
+| `LINE_VIS_ControleQualite` (table entière) | ~160 s |
 
 `LINE_VIS_LineageTables` doit lire toute la table une fois pour trouver les
 colonnes de départ : aucun index ne permet de chercher par table. Un index sur
@@ -204,6 +243,7 @@ sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Lineage.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Impact.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_Chemin.sql
 sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_LineageTables.sql
+sqlcmd -S .\SQLEXPRESS01 -E -C -b -I -i LINE_VIS_ControleQualite.sql
 ```
 
 `-I` est obligatoire (`QUOTED_IDENTIFIER ON`) : sans lui, la procédure ne

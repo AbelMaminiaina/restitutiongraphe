@@ -3,7 +3,8 @@
 -- =============================================================================
 --  Ce fichier regroupe TOUTES les mesures faites sur les procedures de
 --  lineage (LINE_VIS_Lineage, LINE_VIS_Impact, LINE_VIS_Chemin,
---  LINE_VIS_LineageTables) et sur le chargement de LINE_VIS_EDG, avec les
+--  LINE_VIS_LineageTables, LINE_VIS_ControleQualite) et sur le chargement
+--  de LINE_VIS_EDG, avec les
 --  resultats obtenus le 2026-10-15, en commentaire a cote de chaque mesure.
 --
 --  Environnement des resultats :
@@ -12,7 +13,8 @@
 --    210 000 dans LINE_VIS_HEA (donnees generees par LINE_VIS_EDG_data.sql
 --    et LINE_VIS_HEA_data.sql).
 --
---  Lancer (lecture seule sur RestitutionGrapheProd, ~20 s) :
+--  Lancer (lecture seule sur RestitutionGrapheProd, ~3 min dont ~2 min 40
+--  pour le controle qualite de l'experience 5) :
 --    sqlcmd -S .\SQLEXPRESS01 -E -C -I -i tests\experiences_LINE_VIS.sql
 --  -I obligatoire (QUOTED_IDENTIFIER ON, index sur la colonne calculee).
 --
@@ -21,6 +23,7 @@
 --    Experience 2 : place disque et journal
 --    Experience 3 : temps de reponse des procedures sur 7,2 M lignes
 --    Experience 4 : chargement de LINE_VIS_EDG par lots (journal)
+--    Experience 5 : controle qualite des donnees de lineage
 --
 --  Limite des donnees de test (a garder en tete pour lire les temps) :
 --  dans les 7,2 M lignes generees, un voisin (EDG_1..4) n'est jamais
@@ -45,18 +48,20 @@ GO
 
        SERVER='.\SQLEXPRESS01' bash tests/run_tests.sh
 
-   Resultats (2026-10-15) : TOUS LES TESTS PASSENT, 86 verifications,
-   15,5 s au total dont 4,0 s de deploiement.
+   Resultats (2026-10-15, apres ajout du controle qualite) : TOUS LES TESTS
+   PASSENT, 103 verifications, 16,6 s au total dont 4,2 s de deploiement.
 
      Fichier de test                                    Verif.  Duree
      ------------------------------------------------   ------  -----
-     test_LINE_VIS_Chemin.sql                           12 PASS  2,4 s
      test_LINE_VIS_GetNodesSuccessorsPredecessors.sql   18 PASS  2,0 s
-     test_LINE_VIS_NodesList.sql                        18 PASS  1,9 s
+     test_LINE_VIS_Chemin.sql                           12 PASS  1,8 s
+     test_LINE_VIS_NodesList.sql                        18 PASS  1,8 s
+     test_LINE_VIS_ControleQualite.sql                  17 PASS  1,7 s
      test_LINE_VIS_Lineage.sql                          15 PASS  1,6 s
      test_LINE_VIS_LineageTables.sql                     9 PASS  1,2 s
-     test_LINE_VIS_Impact.sql                            9 PASS  1,1 s
-     test_LINE_VIS_NodeById.sql                          5 PASS  1,1 s
+     test_LINE_VIS_Impact.sql                            9 PASS  1,2 s
+     test_LINE_VIS_NodeById.sql                          5 PASS  0,9 s
+   (Avant le controle qualite : 86 verifications, 15,5 s.)
 
    Ce que les tests verifient :
      - parcours multi-niveaux, aval / amont / deux sens ;
@@ -68,6 +73,9 @@ GO
        est atteint ;
      - Impact : comptes de tables, programmes, executions, derniere date ;
      - LineageTables : pas de faux lien table -> table via une autre colonne ;
+     - ControleQualite : chacun des 9 controles sur une fixture ou chaque
+       anomalie est placee a la main (comptes exacts attendus), exemples
+       relus, et "tout OK" sur des donnees propres ;
      - noeud / table inconnus, parametres invalides (erreurs 50001 a 50003) ;
      - non-regression des anciennes procedures (NodesList, NodeById,
        GetNodesSuccessorsPredecessors).
@@ -324,5 +332,52 @@ END
       memoire, et comme les LIN_UID ne sont pas inseres dans l'ordre de la
       cle primaire, chaque lot doit relire des pages sur disque.
    -> Estimation pour un rechargement complet de 7 M lignes : 10 a 12 min.
+   ========================================================================== */
+GO
+
+/* =============================================================================
+   EXPERIENCE 5 : CONTROLE QUALITE DES DONNEES DE LINEAGE
+   =============================================================================
+   LINE_VIS_ControleQualite : 9 controles, une seule lecture de LINE_VIS_EDG
+   (empreintes CHECKSUM dans tempdb). Ici la synthese seulement
+   (@p_sortie = 'S') ; pour les lignes d'exemple : @p_sortie = 'E'.
+   ========================================================================== */
+PRINT '=== EXPERIENCE 5 : controle qualite (~2 min 40) ===';
+
+DECLARE @t DATETIME2 = SYSDATETIME();
+EXEC dbo.LINE_VIS_ControleQualite @p_sortie = 'S';
+PRINT 'Duree du controle qualite : ' + CAST(DATEDIFF(SECOND, @t, SYSDATETIME()) AS VARCHAR) + ' s';
+/* Resultat (2026-10-15, 7,2 M lignes) - duree 160 s, tempdb 720 -> 976 Mo :
+
+     CONTROLE           NB_LIGNES  NB_DISTINCTS  BASE       POURCENT  STATUT
+     SYM_O_SANS_I       3 600 000  3 599 999     3 600 000   100,00   ANOMALIE
+     SYM_I_SANS_O       3 600 000  3 600 000     3 600 000   100,00   ANOMALIE
+     SANS_ENTETE          900 000     30 000     7 200 000    12,50   ANOMALIE
+     ENTETE_INUTILISEE          0          0       210 000     0,00   OK
+     VOISIN_VIDE                0          0     7 200 000     0,00   OK
+     VOISIN_INCOMPLET   4 800 000    160 000     7 200 000    66,67   ANOMALIE
+     NOEUD_INCOMPLET            0          0     7 200 000     0,00   OK
+     VOISIN_FANTOME     7 189 539  4 790 233     7 200 000    99,85   ANOMALIE
+     DOUBLON                    0          0     7 200 000     0,00   OK
+
+   Lecture :
+     - SYM_* = 100 % : dans ces donnees generees, chaque lien n'est stocke
+       qu'une fois (jamais une ligne 'O' chez la source ET une ligne 'I'
+       chez la destination). Le modele "un lien = 2 lignes" ne peut donc
+       pas etre verifie sur ce jeu : a refaire sur les vraies donnees.
+     - SANS_ENTETE = 12,5 % : 900 000 lignes (30 000 LNA_UID, p. ex.
+       ABC_LIS_PCE_42000) n'ont pas d'en-tete dans LINE_VIS_HEA et sont
+       IGNOREES par toutes les procedures de lineage. La table contient
+       7,2 M lignes alors que LINE_VIS_EDG_data.sql en genere 7 M : les
+       lignes en plus viennent probablement d'un autre chargement (bcp ou
+       ancienne version du generateur), sans en-tete correspondant.
+     - VOISIN_INCOMPLET = 66,67 % : voulu par le generateur (EDG_2 NULL une
+       ligne sur 2, EDG_3 une sur 3, EDG_4 une sur 4).
+     - VOISIN_FANTOME = 99,85 % : les voisins (EDG_1 = 'xDI_...') n'ont
+       jamais la forme d'un noeud ; le vrai chiffre est 100 %. Les 10 461
+       lignes "non fantomes" sont des collisions de CHECKSUM : ~0,15 %,
+       conforme a l'ecart maximum annonce dans la procedure (~0,2 %).
+     - NB_DISTINCTS de SYM_O_SANS_I = 3 599 999 pour 3 600 000 lignes : deux
+       couples (noeud, voisin) differents ont la meme empreinte (collision).
    ========================================================================== */
 GO
