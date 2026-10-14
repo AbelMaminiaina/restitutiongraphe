@@ -45,6 +45,7 @@ DEPLOY=(
     "LINE_VIS_Lineage_Parcours.sql"
     "LINE_VIS_Lineage.sql"
     "LINE_VIS_Impact.sql"
+    "LINE_VIS_Chemin.sql"
 )
 
 echo "== Serveur      : $SERVER"

@@ -40,7 +40,10 @@
 --              prendre le MAX.
 --    @p_tronque = 1 si la limite @p_maxnoeuds a ecarte des noeuds.
 --
---  Parametres : voir dbo.LINE_VIS_Lineage.
+--  Parametres : voir dbo.LINE_VIS_Lineage. En plus, facultatif :
+--    @p_cible_hash, @p_cible_1..4 : noeud cible (CHECKSUM et DTA_1..DTA_4).
+--        Le parcours s'arrete a la fin du niveau ou la cible est trouvee
+--        (utilise par dbo.LINE_VIS_Chemin). NULL = pas de cible.
 --
 --  Modele : un noeud = DTA_1..DTA_4 ; une ligne de LINE_VIS_EDG relie le
 --  noeud DTA_1..DTA_4 au voisin EDG_1..EDG_4 ; EDG_DIR = 'O' : le voisin est
@@ -97,7 +100,12 @@ CREATE PROCEDURE [dbo].LINE_VIS_Lineage_Parcours
     @p_sens       CHAR(1),
     @p_profondeur INT,
     @p_maxnoeuds  INT,
-    @p_tronque    BIT OUTPUT
+    @p_tronque    BIT OUTPUT,
+    @p_cible_hash INT           = NULL,
+    @p_cible_1    VARCHAR(1000) = NULL,
+    @p_cible_2    VARCHAR(1000) = NULL,
+    @p_cible_3    VARCHAR(8000) = NULL,
+    @p_cible_4    VARCHAR(1000) = NULL
 
 AS
 BEGIN
@@ -146,10 +154,22 @@ BEGIN
 
     DECLARE @niveau INT = 0
     DECLARE @reste  INT
+    DECLARE @cibleAtteinte BIT = 0
+
+    -- Depart = cible : rien a parcourir
+    IF @p_cible_hash IS NOT NULL AND EXISTS (
+        SELECT 1 FROM #noeuds n
+        WHERE n.NOD_HASH = @p_cible_hash
+          AND (n.DTA_1 = @p_cible_1 OR (n.DTA_1 IS NULL AND @p_cible_1 IS NULL))
+          AND (n.DTA_2 = @p_cible_2 OR (n.DTA_2 IS NULL AND @p_cible_2 IS NULL))
+          AND (n.DTA_3 = @p_cible_3 OR (n.DTA_3 IS NULL AND @p_cible_3 IS NULL))
+          AND (n.DTA_4 = @p_cible_4 OR (n.DTA_4 IS NULL AND @p_cible_4 IS NULL)))
+        SET @cibleAtteinte = 1
 
     /* 2. Parcours en largeur : a chaque tour, on explore les noeuds du
           niveau @niveau et on ajoute leurs voisins au niveau @niveau + 1. */
-    WHILE @niveau < @p_profondeur AND EXISTS (SELECT 1 FROM #noeuds WHERE NIVEAU = @niveau)
+    WHILE @niveau < @p_profondeur AND @cibleAtteinte = 0
+      AND EXISTS (SELECT 1 FROM #noeuds WHERE NIVEAU = @niveau)
     BEGIN
         TRUNCATE TABLE #voisins
         TRUNCATE TABLE #frontiere
@@ -234,6 +254,18 @@ BEGIN
 
         IF @@ROWCOUNT < (SELECT COUNT(*) FROM #voisins)
             SET @p_tronque = 1
+
+        /* 2e. Cible trouvee a ce niveau -> on s'arrete : tous les plus
+               courts chemins vers elle sont deja dans #liens (les liens
+               de CE niveau ont tous ete enregistres en 2d). */
+        IF @p_cible_hash IS NOT NULL AND EXISTS (
+            SELECT 1 FROM #noeuds n
+            WHERE n.NOD_HASH = @p_cible_hash
+              AND (n.DTA_1 = @p_cible_1 OR (n.DTA_1 IS NULL AND @p_cible_1 IS NULL))
+              AND (n.DTA_2 = @p_cible_2 OR (n.DTA_2 IS NULL AND @p_cible_2 IS NULL))
+              AND (n.DTA_3 = @p_cible_3 OR (n.DTA_3 IS NULL AND @p_cible_3 IS NULL))
+              AND (n.DTA_4 = @p_cible_4 OR (n.DTA_4 IS NULL AND @p_cible_4 IS NULL)))
+            SET @cibleAtteinte = 1
 
         SET @niveau += 1
     END
