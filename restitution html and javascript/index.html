@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saisie du lignage</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Librairies modernes, servies EN LOCAL depuis vendor/ (aucun accès internet).
+       - cytoscape : moteur de rendu de graphes (nœuds + arêtes) interactif
+       - dagre + cytoscape-dagre : disposition hiérarchique, idéale pour un graphe ORIENTÉ
+       - xlsx (SheetJS) : lecture ET écriture des fichiers Excel .xlsx dans le navigateur
+       Aucune installation npm : il suffit d'ouvrir index.html dans un navigateur. -->
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/dagre.min.js"></script>
+  <script src="vendor/cytoscape-dagre.min.js"></script>
+  <script src="vendor/xlsx.mini.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <!-- ===== Barre du haut : titre, utilisateur / rôle, import / export ===== -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <div>
+          <h1>Saisie &amp; cartographie du lignage de données</h1>
+          <p class="brand-sub">Origine, transformations et destination de chaque donnée — import / export Excel <code>.xlsx</code></p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="field field-inline">
+          Utilisateur
+          <input type="text" id="user-input" placeholder="votre nom" autocomplete="off" />
+        </label>
+        <label class="field field-inline">
+          Rôle
+          <select id="role-select">
+            <option value="admin">Administrateur</option>
+            <option value="steward" selected>Data Steward / Data Analyst</option>
+            <option value="consommateur">Consommateur (lecture seule)</option>
+          </select>
+        </label>
+        <label class="btn btn-primary" id="import-label">
+          Importer un .xlsx
+          <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
+        </label>
+        <button type="button" class="btn" id="example-btn">Charger l'exemple</button>
+        <button type="button" class="btn" id="export-btn">Exporter .xlsx</button>
+      </div>
+    </header>
+
+    <!-- ===== Barre d'outils du graphe : recherche, niveau, couleurs, filtres ===== -->
+    <div class="toolbar">
+      <div class="tool-group">
+        <input type="search" id="search-input" list="search-datalist" placeholder="Rechercher un asset…" autocomplete="off" />
+        <datalist id="search-datalist"></datalist>
+        <button type="button" class="btn btn-sm" id="btn-amont" title="Tout ce dont dépend l'asset (upstream)">↑ Amont</button>
+        <button type="button" class="btn btn-sm" id="btn-aval" title="Tout ce qui dépend de l'asset (downstream)">↓ Aval</button>
+        <button type="button" class="btn btn-sm" id="btn-deux">↕ Les deux</button>
+      </div>
+
+      <div class="tool-group">
+        <label class="field field-inline">
+          Niveau
+          <select id="level-select">
+            <option value="micro" selected>Micro (colonne à colonne)</option>
+            <option value="macro">Macro (table à table)</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="group-check" checked /> Regrouper par table</label>
+        <label class="field field-inline">
+          Couleur
+          <select id="color-select">
+            <option value="type" selected>par type</option>
+            <option value="criticite">par criticité</option>
+            <option value="statut">par statut</option>
+          </select>
+        </label>
+        <label class="field field-inline">
+          Afficher
+          <select id="filter-select">
+            <option value="tout" selected>tout</option>
+            <option value="critiques">données critiques + leur lignage</option>
+            <option value="pii">données personnelles + propagation</option>
+            <option value="avalider">éléments à valider</option>
+          </select>
+        </label>
+        <label class="check"><input type="checkbox" id="txn-check" /> Règles sur les flèches</label>
+      </div>
+
+      <div class="tool-group">
+        <select id="layout-select" title="Disposition">
+          <option value="dagreLR" selected>Hiérarchique (gauche → droite)</option>
+          <option value="dagre">Hiérarchique (haut → bas)</option>
+          <option value="breadthfirst">Parcours en largeur</option>
+          <option value="concentric">Concentrique (par degré)</option>
+          <option value="circle">Cercle</option>
+          <option value="grid">Grille</option>
+          <option value="cose">Forces (cose)</option>
+        </select>
+        <button type="button" class="btn btn-sm" id="fit-btn">Recentrer</button>
+        <button type="button" class="btn btn-sm" id="png-btn">PNG</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <!-- Zone centrale : le graphe + une zone de dépôt (glisser-déposer) -->
+      <main class="stage" id="stage">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-inner">
+            <div class="dropzone-icon">⇪</div>
+            <p class="dropzone-title">Glissez-déposez votre fichier Excel <code>.xlsx</code> ici</p>
+            <p class="dropzone-hint">ou « Importer un .xlsx » / « Charger l'exemple »,<br />ou déclarez un premier asset dans l'onglet « Saisie »</p>
+          </div>
+        </div>
+
+        <div id="cy"></div>
+
+        <p class="stage-error" id="stage-error" hidden></p>
+        <p class="toast" id="toast" hidden></p>
+
+        <!-- Légende en surimpression (remplie par app.js selon le mode de couleur) -->
+        <div class="legend" id="legend" hidden></div>
+      </main>
+
+      <!-- ===== Panneau latéral à onglets ===== -->
+      <aside class="panel">
+        <nav class="tabs" role="tablist">
+          <button type="button" class="tab active" data-tab="fiche">Fiche</button>
+          <button type="button" class="tab" data-tab="saisie">Saisie</button>
+          <button type="button" class="tab" data-tab="critiques">Critiques <b class="tab-badge" id="crit-badge"></b></button>
+          <button type="button" class="tab" data-tab="validation">Validation <b class="tab-badge" id="valid-badge"></b></button>
+          <button type="button" class="tab" data-tab="historique">Historique</button>
+          <button type="button" class="tab" data-tab="stats">Stats</button>
+        </nav>
+
+        <!-- Onglet FICHE : fiche descriptive de l'élément cliqué -->
+        <section class="tab-panel" id="tab-fiche">
+          <p class="muted" id="fiche-hint">Cliquez un nœud (asset) ou une flèche (relation) du graphe, ou utilisez la recherche.</p>
+          <div id="fiche"></div>
+        </section>
+
+        <!-- Onglet SAISIE : déclaration manuelle d'assets et de relations -->
+        <section class="tab-panel" id="tab-saisie" hidden>
+          <p class="notice" id="readonly-notice" hidden>Rôle « Consommateur » : consultation en lecture seule. Choisissez « Data Steward » ou « Administrateur » pour saisir.</p>
+
+          <div class="card" id="asset-card">
+            <h2 id="asset-form-title">Déclarer un asset</h2>
+            <form id="asset-form" autocomplete="off">
+              <div class="grid2">
+                <label class="field">Système / base<input id="af-sys" placeholder="ex. DWH" /></label>
+                <label class="field">Schéma<input id="af-schema" placeholder="ex. DM" /></label>
+                <label class="field">Objet (table, fichier, rapport)<input id="af-objet" placeholder="ex. FAIT_VENTES" /></label>
+                <label class="field">Colonne / champ<input id="af-col" placeholder="ex. MONTANT_TTC" /></label>
+              </div>
+              <p class="id-preview">Identifiant : <code id="af-id-preview">—</code></p>
+              <div class="grid2">
+                <label class="field">Nature
+                  <select id="af-nature">
+                    <option value="donnee">Donnée</option>
+                    <option value="traitement">Traitement (job, calcul)</option>
+                  </select>
+                </label>
+                <label class="field">Type<select id="af-type"></select></label>
+                <label class="field">Propriétaire (Data Owner)<input id="af-owner" placeholder="ex. Direction Financière" /></label>
+                <label class="field">Niveau de criticité<select id="af-crit"></select></label>
+              </div>
+              <label class="field">Description métier<textarea id="af-desc" rows="2"></textarea></label>
+              <label class="check"><input type="checkbox" id="af-pii" /> Donnée personnelle (PII / RGPD)</label>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-primary" id="af-save">Enregistrer</button>
+                <button type="button" class="btn" id="af-reset">Nouveau</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card" id="rel-card">
+            <h2 id="rel-form-title">Déclarer une relation Parent → Enfant</h2>
+            <form id="rel-form" autocomplete="off">
+              <datalist id="assets-datalist"></datalist>
+              <label class="field">Parent (amont / source)<input id="rf-source" list="assets-datalist" placeholder="identifiant de l'asset parent" /></label>
+              <label class="field">Enfant (aval / cible)<input id="rf-target" list="assets-datalist" placeholder="identifiant de l'asset enfant" /></label>
+              <label class="field">Règle de transformation<textarea id="rf-txn" rows="2" placeholder="ex. Montant_TTC = Montant_HT * 1.2"></textarea></label>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-primary" id="rf-save">Enregistrer</button>
+                <button type="button" class="btn" id="rf-reset">Nouveau</button>
+              </div>
+            </form>
+          </div>
+
+          <p class="muted small">Toute création ou modification passe au statut <b>« À valider »</b> ; un Data Steward ou un Administrateur la valide dans l'onglet « Validation ».</p>
+
+          <div class="card" id="admin-card">
+            <h2>Administration</h2>
+            <p class="muted small">Réservé à l'Administrateur. Exportez la base avant de la vider.</p>
+            <div class="btn-row">
+              <button type="button" class="btn btn-danger" id="reset-btn">Vider la base</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Onglet CRITIQUES : données critiques / personnelles -->
+        <section class="tab-panel" id="tab-critiques" hidden>
+          <div class="stats" id="crit-tiles"></div>
+          <div class="btn-row">
+            <button type="button" class="btn btn-sm" id="crit-filter-btn">Ne montrer que ces données et leur lignage</button>
+          </div>
+          <div id="crit-list"></div>
+        </section>
+
+        <!-- Onglet VALIDATION : file des éléments « À valider » -->
+        <section class="tab-panel" id="tab-validation" hidden>
+          <div id="valid-list"></div>
+        </section>
+
+        <!-- Onglet HISTORIQUE : journal des modifications -->
+        <section class="tab-panel" id="tab-historique" hidden>
+          <input type="search" id="hist-filter" class="full" placeholder="Filtrer (utilisateur, action, asset…)" />
+          <div id="hist-list"></div>
+        </section>
+
+        <!-- Onglet STATS -->
+        <section class="tab-panel" id="tab-stats" hidden>
+          <p class="muted small" id="file-name">Aucune donnée chargée.</p>
+          <div class="stats" id="stats"><p class="muted">—</p></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="exemple-data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
