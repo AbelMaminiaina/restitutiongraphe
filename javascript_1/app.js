@@ -63,36 +63,45 @@ function brk(label) {
 }
 
 /* ------------------------------------------------------------------
-   1. Exemple embarqué (= contenu de exemple.xlsx sous forme de lignes)
+   1. Exemples embarqués (= contenu de exemple_parcours.xlsx et
+      exemple_adjacent.xlsx sous forme de lignes)
    ------------------------------------------------------------------
-   Le bouton « Charger l'exemple » réutilise ces lignes : pas besoin de
-   télécharger un fichier. Régénéré par `node generer-exemple.mjs`
-   (qui produit aussi exemple.xlsx à partir des mêmes données).
+   Les boutons « Exemple parcours » et « Exemple adjacent » réutilisent ces
+   lignes : pas besoin de télécharger un fichier. Les deux tableaux entre
+   les repères ci-dessous sont RÉÉCRITS par `node generer-exemple.mjs`
+   (qui produit aussi les deux .xlsx) : ne pas les modifier à la main.
    1re sous-liste = en-têtes, puis une sous-liste par ligne de données.
 ------------------------------------------------------------------ */
-const EXEMPLE_ROWS = [
-  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta", "Typos"],
-  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4", "agrégation", "Parcours"],
-  ["DB1", "DB2", "DB3", "DB4", "I", "EA1", "EA2", "EA3", "EA4", "filtre", "Parcours"],
-  ["DC1", "DC2", "DC3", "DC4", "I", "EA1", "EA2", "EA3", "EA4", "jointure", "Parcours"],
-  ["DA1", "DA2", "DA3", "DA4", "I", "EB1", "EB2", "EB3", "EB4", "tri", "Parcours"],
-  ["DD1", "DD2", "DD3", "DD4", "O", "EB1", "EB2", "EB3", "EB4", "calcul", "Parcours"],
-  ["DE1", "DE2", "DE3", "DE4", "O", "EB1", "EB2", "EB3", "EB4", "arrondi", "Parcours"],
-  ["DD1", "DD2", "DD3", "DD4", "I", "EC1", "EC2", "EC3", "EC4", "normalisation", "Parcours"],
-  ["DE1", "DE2", "DE3", "DE4", "I", "ED1", "ED2", "ED3", "ED4", "déduplication", "Parcours"],
-  ["DG1", "DG2", "DG3", "DG4", "O", "ED1", "ED2", "ED3", "ED4", "conversion", "Parcours"],
-  ["DG1", "DG2", "DG3", "DG4", "I", "EF1", "EF2", "EF3", "EF4", "jointure", "Parcours"],
-  ["DC1", "DC2", "DC3", "DC4", "O", "EF1", "EF2", "EF3", "EF4", "calcul", "Parcours"],
-  ["DF1", "DF2", "DF3", "DF4", "I", "EE1", "EE2", "EE3", "EE4", "filtre", "Parcours"],
-  ["DH1", "DH2", "DH3", "DH4", "O", "EE1", "EE2", "EE3", "EE4", "agrégation", "Parcours"],
-  ["DH1", "DH2", "DH3", "DH4", "I", "EF1", "EF2", "EF3", "EF4", "tri", "Parcours"],
-  ["DI1", "DI2", "DI3", "DI4", "O", "EC1", "EC2", "EC3", "EC4", "concaténation", "Complete"],
-  ["DJ1", "DJ2", "DJ3", "DJ4", "O", "EE1", "EE2", "EE3", "EE4", "", "Complete"],
-  ["DK1", "DK2", "DK3", "DK4", "O", "EF1", "EF2", "EF3", "EF4", "", "Complete"],
-  ["DL1", "DL2", "DL3", "DL4", "O", "EA1", "EA2", "EA3", "EA4", "normalisation", "Complete"],
-  ["DM1", "DM2", "DM3", "DM4", "O", "ED1", "ED2", "ED3", "ED4", "", "Complete"],
-  ["DI1", "DI2", "DI3", "DI4", "O", "EB1", "EB2", "EB3", "EB4", "déduplication", "Complete"],
+// <exemples-debut>
+const EXEMPLE_PARCOURS_ROWS = [
+  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"],
+  ["DA1", "DA2", "DA3", "DA4", "I", "EA1", "EA2", "EA3", "EA4", "filtre"],
+  ["DB1", "DB2", "DB3", "DB4", "O", "EA1", "EA2", "EA3", "EA4", "agrégation"],
+  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", ""],
+  ["DC1", "DC2", "DC3", "DC4", "O", "EB1", "EB2", "EB3", "EB4", "jointure"],
+  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "tri"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "EC1", "EC2", "EC3", "EC4", ""],
+  ["DD1", "DD2", "DD3", "DD4", "I", "ED1", "ED2", "ED3", "ED4", "calcul"],
+  ["DE1", "DE2", "DE3", "DE4", "O", "ED1", "ED2", "ED3", "ED4", "normalisation"],
+  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", ""],
+  ["DF1", "DF2", "DF3", "DF4", "O", "EE1", "EE2", "EE3", "EE4", "déduplication"],
 ];
+
+const EXEMPLE_ADJACENT_ROWS = [
+  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"],
+  ["DB1", "DB2", "DB3", "DB4", "O", "DA1", "DA2", "DA3", "DA4", "filtre"],
+  ["DC1", "DC2", "DC3", "DC4", "O", "DB1", "DB2", "DB3", "DB4", ""],
+  ["DD1", "DD2", "DD3", "DD4", "O", "DC1", "DC2", "DC3", "DC4", "jointure"],
+  ["DE1", "DE2", "DE3", "DE4", "O", "DD1", "DD2", "DD3", "DD4", "calcul"],
+  ["DF1", "DF2", "DF3", "DF4", "O", "DE1", "DE2", "DE3", "DE4", ""],
+  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4", "chargement"],
+  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", ""],
+  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "copie"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "ED1", "ED2", "ED3", "ED4", ""],
+  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", "tri"],
+  ["DF1", "DF2", "DF3", "DF4", "I", "EF1", "EF2", "EF3", "EF4", "export"],
+];
+// <exemples-fin>
 
 /* ------------------------------------------------------------------
    2. Du tableau Excel vers le graphe { nodes, edges }
@@ -149,7 +158,6 @@ function rowsToGraph(rows) {
   const edgCol = {};
   let dirCol = -1;
   let txnCol = -1;
-  let typosCol = -1; // colonne « Typos » (Parcours / Complete), -1 si absente
 
   header.forEach((name, idx) => {
     // idx = position de la colonne (0, 1, 2...). name = l'en-tête normalisé.
@@ -162,8 +170,6 @@ function rowsToGraph(rows) {
     else if (name.includes("dir")) dirCol = idx;
     // Colonne de transformation : n'importe quel en-tête qui contient "txn" (txn_dta...).
     else if (name.includes("txn")) txnCol = idx;
-    // Colonne « Typos » : tout en-tête qui contient "typo" (Typos, typo, TYPOS...).
-    else if (name.includes("typo")) typosCol = idx;
   });
 
   if (Object.keys(dtaCol).length === 0 || Object.keys(edgCol).length === 0) {
@@ -193,10 +199,6 @@ function rowsToGraph(rows) {
       .join("."); // on recolle avec des points
 
   const nodeKind = new Map(); // nom du nœud -> ensemble de types ("dta" et/ou "edg")
-  // nodeTypos : nom du nœud -> "parcours" ou "complete" (valeur de la colonne Typos).
-  // Si un nœud apparaît sur plusieurs lignes, "parcours" l'emporte : il suffit
-  // qu'UNE ligne le marque « Parcours » pour qu'il soit coloré comme tel.
-  const nodeTypos = new Map();
   const edgeSet = new Set();  // couples "source target" déjà vus (évite les doublons)
   const edges = [];           // liste finale des arêtes { source, target }
 
@@ -204,13 +206,6 @@ function rowsToGraph(rows) {
   const noteKind = (id, kind) => {
     if (!nodeKind.has(id)) nodeKind.set(id, new Set());
     nodeKind.get(id).add(kind);
-  };
-
-  // noteTypos : mémorise la typologie d'un nœud ("parcours" prioritaire).
-  const noteTypos = (id, typos) => {
-    if (!typos) return;                                // cellule vide : rien à noter
-    if (nodeTypos.get(id) === "parcours") return;      // déjà « parcours » : on garde
-    nodeTypos.set(id, typos);
   };
 
   for (let r = 1; r < rows.length; r++) { // r commence à 1 : on saute l'en-tête (rows[0])
@@ -233,15 +228,6 @@ function rowsToGraph(rows) {
     // On enregistre le type de chaque nœud présent (il peut n'y en avoir qu'un).
     if (dtaNode) noteKind(dtaNode, "dta");
     if (edgNode) noteKind(edgNode, "edg");
-
-    // Typologie de la ligne (colonne Typos) : "Parcours" ou "Complete".
-    // On ne regarde que la 1re lettre, sans tenir compte de la casse :
-    //   P... -> "parcours",  C... -> "complete",  autre / vide -> "" (rien).
-    // Elle s'applique aux DEUX nœuds de la ligne (données et edg).
-    const typosBrut = String(row[typosCol] == null ? "" : row[typosCol]).trim().toUpperCase();
-    const typos = typosBrut.startsWith("P") ? "parcours" : typosBrut.startsWith("C") ? "complete" : "";
-    if (dtaNode) noteTypos(dtaNode, typos);
-    if (edgNode) noteTypos(edgNode, typos);
 
     // Un seul côté rempli (ex. une ligne avec dta_1..dta_4 mais pas de edg_*
     // ni de edg_dir) : c'est un nœud ISOLÉ. On le garde dans la liste des
@@ -302,8 +288,6 @@ function rowsToGraph(rows) {
     id,
     // "both" si le nœud est à la fois donnée et edg, sinon l'un des deux.
     kind: kinds.has("dta") && kinds.has("edg") ? "both" : kinds.has("edg") ? "edg" : "dta",
-    // "parcours", "complete" ou "" (colonne Typos absente / vide).
-    typos: nodeTypos.get(id) || "",
   }));
 
   // Point d'arrêt : le graphe final avant affichage.
@@ -334,7 +318,8 @@ const dropzone = document.getElementById("dropzone");
 const stageError = document.getElementById("stage-error");
 const legend = document.getElementById("legend");
 const fileInput = document.getElementById("file-input");
-const exampleBtn = document.getElementById("example-btn");
+const exampleParcoursBtn = document.getElementById("example-parcours-btn");
+const exampleAdjacentBtn = document.getElementById("example-adjacent-btn");
 const fileNameEl = document.getElementById("file-name");
 const layoutSelect = document.getElementById("layout-select");
 const fitBtn = document.getElementById("fit-btn");
@@ -379,11 +364,45 @@ const LAYOUT_CONFIGS = {
 };
 
 /* ------------------------------------------------------------------
+   4 bis. Mode de présentation déduit du NOM du fichier importé
+   ------------------------------------------------------------------
+   Le nom du fichier se termine par un suffixe qui dit comment l'afficher :
+     ..._parcours.xlsx  -> mode "parcours" : TOUS les nœuds sont des parcours
+                           => tous en JAUNE ;
+     ..._adjacent.xlsx  -> mode "adjacent" : seuls les nœuds « données »
+                           (dta_1..dta_4) sont des parcours => JAUNE ;
+                           les nœuds edg_1..edg_4 restent neutres (BLEU).
+     autre nom          -> mode ""  : couleurs normales (bleu / violet / rose).
+   La casse est ignorée ("Parcours", "PARCOURS"... marchent), et le séparateur
+   avant le suffixe n'a pas d'importance ("x_parcours", "x-parcours", "xparcours").
+   Les arcs suivent la même règle dans tous les modes : trait plein si une
+   transformation (txn_dta) est renseignée, pointillé sinon.
+------------------------------------------------------------------ */
+function modeFromFileName(fileName) {
+  // On enlève l'extension (".xlsx", ".xls"...) puis on passe en minuscules.
+  //   "Lineage_Parcours.xlsx" -> "lineage_parcours"
+  const base = String(fileName || "").replace(/\.[^.]*$/, "").trim().toLowerCase();
+  if (base.endsWith("parcours")) return "parcours";
+  if (base.endsWith("adjacent")) return "adjacent";
+  return ""; // pas de suffixe reconnu
+}
+
+// Un nœud est-il « parcours » (donc jaune) dans ce mode ?
+//   - mode parcours : oui, toujours ;
+//   - mode adjacent : oui s'il vient des colonnes dta_* (kind "dta" ou "both") ;
+//   - sinon         : non.
+function isParcoursNode(node, mode) {
+  if (mode === "parcours") return true;
+  if (mode === "adjacent") return node.kind === "dta" || node.kind === "both";
+  return false;
+}
+
+/* ------------------------------------------------------------------
    5. Rendu du graphe avec cytoscape
 ------------------------------------------------------------------ */
-function renderGraph(data) {
+function renderGraph(data, mode = "") {
   // Point d'arrêt : `data` = { nodes, edges } sur le point d'être dessiné.
-  brk("renderGraph — entrée. Regarde: data, layoutSelect.value");
+  brk("renderGraph — entrée. Regarde: data, mode, layoutSelect.value");
 
   // On repart de zéro à chaque nouveau fichier.
   if (cy) {
@@ -396,9 +415,14 @@ function renderGraph(data) {
   // dans un autre : ici, tous les nœuds puis toutes les arêtes.
   const elements = [
     // un objet par nœud : id + label affiché + kind (pour la couleur)
-    // + typos ("parcours" / "complete" / "") pour la couleur spéciale « Parcours »
+    // + parcours ("oui" / "non") : "oui" => nœud colorié en jaune (voir le style).
     ...data.nodes.map((n) => ({
-      data: { id: n.id, label: n.id, kind: n.kind || "dta", typos: n.typos || "" },
+      data: {
+        id: n.id,
+        label: n.id,
+        kind: n.kind || "dta",
+        parcours: isParcoursNode(n, mode) ? "oui" : "non",
+      },
     })),
     // un objet par arête : un id unique + les deux extrémités source/target
     ...data.edges.map((e) => ({
@@ -437,13 +461,12 @@ function renderGraph(data) {
       { selector: 'node[kind = "edg"]', style: { "background-color": "#6ea8fe" } },
       { selector: 'node[kind = "dta"]', style: { "background-color": "#a78bfa" } },
       { selector: 'node[kind = "both"]', style: { "background-color": "#f472b6" } },
-      // Nœuds de typologie « Parcours » (colonne Typos) : UNE couleur unique
-      // (orange) qui remplace la couleur edg/données. Placé APRÈS les règles
-      // "kind" pour les écraser, mais AVANT les règles de sélection
-      // (selected/succ/pred) pour que le clic reste lisible.
+      // Nœuds « parcours » (mode déduit du nom du fichier) : JAUNE.
+      // Placé APRÈS les règles "kind" pour les écraser, mais AVANT les règles
+      // de sélection (selected / succ / pred) pour que le clic reste visible.
       {
-        selector: 'node[typos = "parcours"]',
-        style: { "background-color": "#fb923c", "border-color": "#7c2d12", "border-width": 3 },
+        selector: 'node[parcours = "oui"]',
+        style: { "background-color": "#fde047", "border-color": "#713f12", "border-width": 3 },
       },
       {
         selector: "edge",
@@ -497,13 +520,13 @@ function renderGraph(data) {
       // Prédécesseurs du nœud cliqué (arêtes entrantes)
       {
         selector: "node.pred",
-        style: { "background-color": "#fbbf24", "border-color": "#78350f" },
+        style: { "background-color": "#f97316", "border-color": "#7c2d12" },
       },
       {
         selector: "edge.pred",
         style: {
-          "line-color": "#fbbf24",
-          "target-arrow-color": "#fbbf24",
+          "line-color": "#f97316",
+          "target-arrow-color": "#f97316",
           width: 3.5,
         },
       },
@@ -662,19 +685,6 @@ function computeStats(data) {
     }
   });
 
-  // Contrôle Typos : un nœud « Complete » doit être une FEUILLE, c'est-à-dire
-  // n'avoir AUCUN successeur (aucune arête sortante, deg.out === 0).
-  // On liste ceux qui ne respectent pas la règle et on les signale en console.
-  const completeNonFeuilles = data.nodes
-    .filter((nd) => nd.typos === "complete" && deg[nd.id].out > 0)
-    .map((nd) => nd.id);
-  if (completeNonFeuilles.length > 0) {
-    console.warn(
-      "Typos : nœuds « Complete » qui ont des successeurs (devraient être des feuilles) : " +
-        completeNonFeuilles.join(", ")
-    );
-  }
-
   // Densité d'un graphe orienté simple : m / (n * (n - 1))
   const density = n > 1 ? (m / (n * (n - 1))).toFixed(3) : "0";
   const avgOut = n ? (m / n).toFixed(2) : "0";
@@ -687,7 +697,6 @@ function computeStats(data) {
     isolated,
     maxDeg,
     maxDegNode,
-    completeNonFeuilles,
     hasCycle: detectCycle(data),
     components: countWeakComponents(data),
   };
@@ -789,29 +798,24 @@ function renderStats(s) {
     cell("Nœuds isolés", s.isolated),
     cell("Composantes", s.components),
     cell("Cycle", s.hasCycle ? "Oui" : "Non", s.hasCycle ? "warn" : "ok"),
-    // Nombre de nœuds « Complete » qui ne sont pas des feuilles (0 attendu).
-    // Le détail (leurs noms) est affiché dans la console F12.
-    cell(
-      "Complete non feuilles",
-      s.completeNonFeuilles.length,
-      s.completeNonFeuilles.length > 0 ? "warn" : "ok"
-    ),
   ].join("");
 }
 
 /* ------------------------------------------------------------------
    8. Point d'entrée : afficher un graphe déjà analysé
 ------------------------------------------------------------------ */
-function loadGraph(data, label) {
+// label = texte affiché (nom du fichier) ; mode = "parcours", "adjacent" ou "".
+function loadGraph(data, label, mode = "") {
   try {
     currentData = data;
 
     hideError();
     dropzone.classList.add("hidden");
     legend.hidden = false;
-    fileNameEl.textContent = label;
+    // On affiche le mode détecté à côté du nom, pour que l'utilisateur le voie.
+    fileNameEl.textContent = mode ? `${label} — mode ${mode}` : label;
 
-    renderGraph(data);
+    renderGraph(data, mode);
     renderStats(computeStats(data));
     clearSelection();
   } catch (err) {
@@ -830,7 +834,8 @@ function loadFile(file) {
     // Point d'arrêt : on tient les octets bruts du .xlsx.
     brk("loadFile — fichier lu : " + file.name + " (" + reader.result.byteLength + " octets)");
     try {
-      loadGraph(workbookBufferToGraph(reader.result), file.name);
+      // Le mode (parcours / adjacent) vient du suffixe du nom du fichier.
+      loadGraph(workbookBufferToGraph(reader.result), file.name, modeFromFileName(file.name));
     } catch (err) {
       showError(err.message || String(err)); // format invalide, colonne manquante...
     }
@@ -858,14 +863,22 @@ fileInput.addEventListener("change", (e) => {
   fileInput.value = ""; // permet de recharger le même fichier ensuite
 });
 
-// b) Bouton « Charger l'exemple »
-exampleBtn.addEventListener("click", () => {
+// b) Boutons « Exemple parcours » et « Exemple adjacent »
+// On passe un nom de fichier « fictif » à modeFromFileName : son suffixe
+// (_parcours / _adjacent) choisit le mode, exactement comme pour un import.
+function loadExample(rows, fileName) {
   try {
-    loadGraph(rowsToGraph(EXEMPLE_ROWS), "exemple.xlsx (intégré)");
+    loadGraph(rowsToGraph(rows), fileName + " (intégré)", modeFromFileName(fileName));
   } catch (err) {
     showError(err.message || String(err));
   }
-});
+}
+exampleParcoursBtn.addEventListener("click", () =>
+  loadExample(EXEMPLE_PARCOURS_ROWS, "exemple_parcours.xlsx")
+);
+exampleAdjacentBtn.addEventListener("click", () =>
+  loadExample(EXEMPLE_ADJACENT_ROWS, "exemple_adjacent.xlsx")
+);
 
 // c) Glisser-déposer sur la scène
 stage.addEventListener("dragover", (e) => {

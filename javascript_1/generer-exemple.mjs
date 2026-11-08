@@ -1,14 +1,29 @@
 /* ==================================================================
-   Génère javascript/exemple.xlsx — un jeu de démonstration d'une
-   vingtaine de lignes au format attendu par l'application.
+   Génère les deux jeux de démonstration de l'application :
+
+     exemple_parcours.xlsx  -> affiché en mode « parcours »
+                               (tous les nœuds en jaune)
+     exemple_adjacent.xlsx  -> affiché en mode « adjacent »
+                               (nœuds données dta_* en jaune,
+                                nœuds edg_* neutres en bleu)
+
+   Le MODE est choisi par l'application d'après le SUFFIXE du nom du
+   fichier (…_parcours.xlsx / …_adjacent.xlsx) : c'est pour ça que les
+   noms se terminent ainsi.
    ------------------------------------------------------------------
    Lancer :  node generer-exemple.mjs
 
    Utilise la librairie déjà présente dans vendor/ (SheetJS) : aucune
    installation, aucun accès internet.
 
-   Le script affiche aussi le tableau `EXEMPLE_ROWS` à recopier dans
-   app.js (le bouton « Charger l'exemple » doit rester synchronisé).
+   Le script met aussi à jour AUTOMATIQUEMENT les tableaux
+   EXEMPLE_PARCOURS_ROWS et EXEMPLE_ADJACENT_ROWS dans app.js (entre les
+   repères « <exemples-debut> » et « <exemples-fin> ») : les boutons
+   « Exemple parcours » / « Exemple adjacent » du site restent donc
+   synchronisés avec les fichiers .xlsx, sans copier-coller.
+
+   Fermez les fichiers .xlsx dans Excel avant de lancer le script
+   (sinon erreur « fichier verrouillé »).
    ================================================================== */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -21,94 +36,122 @@ const require = createRequire(import.meta.url);
 const XLSX = require(join(HERE, "vendor", "xlsx.mini.min.js"));
 
 /* ------------------------------------------------------------------
-   1. Description du graphe de démonstration
+   1. Description des deux graphes de démonstration
    ------------------------------------------------------------------
-   - nœuds « données »  : DA .. DM   (13)
-   - nœuds « edg »       : EA .. EF   (6)
-   - chaque enregistrement ci-dessous = [ nœudDonnées, sens, nœudEdg, txn_dta, Typos ]
-       sens "I" -> arête  données -> edg   (données prédécesseur de edg)
-       sens "O" -> arête  edg -> données   (données successeur  de edg)
-   Le jeu contient un cycle (entièrement « Parcours ») :
-     DC -> EA -> DA -> EB -> DE -> ED -> DG -> EF -> DC
-
+   Chaque enregistrement = [ nœudDonnées, sens, nœudEdg, txn_dta ]
+     sens "I" -> arête  données -> edg   (données prédécesseur de edg)
+     sens "O" -> arête  edg -> données   (données successeur  de edg)
    txn_dta = la TRANSFORMATION appliquée sur l'arête (simple étiquette).
-   Vide ("") -> l'arc est dessiné en POINTILLÉ dans l'application.
-
-   Typos = "Parcours" ou "Complete", appliqué aux DEUX nœuds de la ligne
-   (« Parcours » l'emporte si un nœud apparaît sur plusieurs lignes) :
-     - Parcours : nœud intermédiaire du parcours (couleur orange) ;
-     - Complete : nœud FEUILLE, c'est-à-dire SANS SUCCESSEUR.
-   RÈGLE respectée ici : un nœud qui reste « Complete » n'a aucune arête
-   sortante. D'où la forme des lignes Complete : toujours sens "O"
-   (edg -> données), le nœud données (DI..DM) n'apparaissant QUE dans des
-   lignes Complete, et le nœud edg étant déjà « Parcours » par une autre
-   ligne. L'application signale toute violation (stat « Complete non
-   feuilles »).
+     renseignée -> arc en trait PLEIN dans l'application ;
+     vide ("")  -> arc en POINTILLÉ.
 ------------------------------------------------------------------ */
-const RECORDS = [
-  // --- Parcours : nœuds intermédiaires (dont le cycle) ---
-  ["DA", "O", "EA", "agrégation", "Parcours"],
-  ["DB", "I", "EA", "filtre", "Parcours"],
-  ["DC", "I", "EA", "jointure", "Parcours"],
-  ["DA", "I", "EB", "tri", "Parcours"],
-  ["DD", "O", "EB", "calcul", "Parcours"],
-  ["DE", "O", "EB", "arrondi", "Parcours"],
-  ["DD", "I", "EC", "normalisation", "Parcours"],
-  ["DE", "I", "ED", "déduplication", "Parcours"],
-  ["DG", "O", "ED", "conversion", "Parcours"],
-  ["DG", "I", "EF", "jointure", "Parcours"],
-  ["DC", "O", "EF", "calcul", "Parcours"],
-  ["DF", "I", "EE", "filtre", "Parcours"],
-  ["DH", "O", "EE", "agrégation", "Parcours"],
-  ["DH", "I", "EF", "tri", "Parcours"],
-  // --- Complete : feuilles DI..DM (aucun successeur) ---
-  ["DI", "O", "EC", "concaténation", "Complete"],
-  ["DJ", "O", "EE", "", "Complete"],
-  ["DK", "O", "EF", "", "Complete"],
-  ["DL", "O", "EA", "normalisation", "Complete"],
-  ["DM", "O", "ED", "", "Complete"],
-  ["DI", "O", "EB", "déduplication", "Complete"],
+
+// --- 1.a  Parcours : UNE LIGNE, du début à la fin --------------------
+// Un parcours se lit d'un bout à l'autre, sans embranchement ni boucle :
+//   DA -> EA -> DB -> EB -> DC -> EC -> DD -> ED -> DE -> EE -> DF
+// Chaque nœud a au plus 1 prédécesseur et 1 successeur, donc le graphe
+// s'affiche comme une ligne. Pour chaque traitement edg, on a 2 lignes :
+//   sens "I" : la donnée qui ENTRE   (donnée -> edg)
+//   sens "O" : la donnée qui SORT    (edg -> donnée)
+// En mode parcours, TOUS ces nœuds seront jaunes.
+const RECORDS_PARCOURS = [
+  ["DA", "I", "EA", "filtre"],
+  ["DB", "O", "EA", "agrégation"],
+  ["DB", "I", "EB", ""],
+  ["DC", "O", "EB", "jointure"],
+  ["DC", "I", "EC", "tri"],
+  ["DD", "O", "EC", ""],
+  ["DD", "I", "ED", "calcul"],
+  ["DE", "O", "ED", "normalisation"],
+  ["DE", "I", "EE", ""],
+  ["DF", "O", "EE", "déduplication"],
+];
+
+// --- 1.b  Adjacent : les nœuds jaunes SE SUIVENT, les edg sont à côté ----
+// Les nœuds du parcours DA..DF (jaunes en mode adjacent) se suivent
+// DIRECTEMENT, arc après arc, sans traitement entre eux :
+//   DA -> DB -> DC -> DD -> DE -> DF
+// Astuce : pour relier deux données directement, la donnée de départ est
+// écrite dans les colonnes edg_1..edg_4 (ex. ligne [DB, "O", DA] = arc
+// DA -> DB). Un nœud présent à la fois en dta_* et en edg_* est jaune en
+// mode adjacent (il fait partie des nœuds source).
+// Les traitements adjacents EA..EF sont de vrais nœuds edg (neutres =>
+// BLEUS) : chacun est branché sur UNE donnée du parcours.
+const RECORDS_ADJACENT = [
+  // la ligne des nœuds jaunes : DA -> DB -> DC -> DD -> DE -> DF
+  ["DB", "O", "DA", "filtre"],
+  ["DC", "O", "DB", ""],
+  ["DD", "O", "DC", "jointure"],
+  ["DE", "O", "DD", "calcul"],
+  ["DF", "O", "DE", ""],
+  // les traitements adjacents (bleus), un par donnée du parcours
+  ["DA", "O", "EA", "chargement"], // EA produit DA      (en amont du début)
+  ["DB", "I", "EB", ""],           // DB part aussi vers EB
+  ["DC", "I", "EC", "copie"],      // DC part aussi vers EC
+  ["DD", "O", "ED", ""],           // ED produit aussi DD
+  ["DE", "I", "EE", "tri"],        // DE part aussi vers EE
+  ["DF", "I", "EF", "export"],     // DF part vers EF     (en aval de la fin)
 ];
 
 /* ------------------------------------------------------------------
-   2. Transforme chaque enregistrement en une ligne de 9 colonnes
+   2. Transforme chaque enregistrement en une ligne de 10 colonnes
    ------------------------------------------------------------------
    Un nœud logique « DA » est décrit par ses 4 morceaux DA1..DA4.
    Comme l'application concatène dans l'ordre 4->1, l'étiquette
-   affichée sera « DA4.DA3.DA2.DA1 » (même logique que E11..E14 dans
-   l'exemple d'origine).
+   affichée sera « DA4.DA3.DA2.DA1 ».
 ------------------------------------------------------------------ */
-const HEADER = ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta", "Typos"];
+const HEADER = ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"];
 
 const parts = (nom) => [1, 2, 3, 4].map((i) => `${nom}${i}`); // "DA" -> ["DA1","DA2","DA3","DA4"]
 
-const dataRows = RECORDS.map(([dta, dir, edg, txn, typos]) => [...parts(dta), dir, ...parts(edg), txn, typos]);
-const rows = [HEADER, ...dataRows];
+// toRows : enregistrements -> tableau complet (en-tête + lignes)
+const toRows = (records) => [
+  HEADER,
+  ...records.map(([dta, dir, edg, txn]) => [...parts(dta), dir, ...parts(edg), txn]),
+];
 
 /* ------------------------------------------------------------------
-   3. Écrit le fichier .xlsx
+   3. Écrit un fichier .xlsx et le relit pour contrôle
 ------------------------------------------------------------------ */
-const ws = XLSX.utils.aoa_to_sheet(rows);
-const wb = XLSX.utils.book_new();
-XLSX.utils.book_append_sheet(wb, ws, "Feuil1");
-const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+function writeXlsx(fileName, rows) {
+  const outPath = join(HERE, fileName);
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Feuil1");
+  writeFileSync(outPath, XLSX.write(wb, { type: "buffer", bookType: "xlsx" }));
 
-// Chemin de sortie : argument optionnel, sinon ./exemple.xlsx
-const outPath = process.argv[2] ? process.argv[2] : join(HERE, "exemple.xlsx");
-writeFileSync(outPath, buf);
+  // Petit contrôle : relit le fichier et compte les lignes.
+  const back = XLSX.read(new Uint8Array(readFileSync(outPath)), { type: "array" });
+  const readRows = XLSX.utils.sheet_to_json(back.Sheets[back.SheetNames[0]], { header: 1 });
+  console.log(`${fileName} écrit : ${readRows.length - 1} lignes de données (relecture OK).`);
+}
 
-console.log(`${outPath} écrit : ${dataRows.length} lignes de données.`);
+const rowsParcours = toRows(RECORDS_PARCOURS);
+const rowsAdjacent = toRows(RECORDS_ADJACENT);
+writeXlsx("exemple_parcours.xlsx", rowsParcours);
+writeXlsx("exemple_adjacent.xlsx", rowsAdjacent);
 
 /* ------------------------------------------------------------------
-   4. Affiche le tableau à recopier dans app.js (const EXEMPLE_ROWS)
+   4. Met à jour les exemples intégrés dans app.js
+   ------------------------------------------------------------------
+   On remplace tout ce qui se trouve entre les deux lignes repères
+   « // <exemples-debut> » et « // <exemples-fin> ».
 ------------------------------------------------------------------ */
-const jsArray =
-  "const EXEMPLE_ROWS = [\n" +
+const jsArray = (name, rows) =>
+  `const ${name} = [\n` +
   rows.map((r) => "  [" + r.map((c) => JSON.stringify(c)).join(", ") + "],").join("\n") +
   "\n];";
-console.log("\n--- à recopier dans app.js ---\n" + jsArray);
 
-/* Petit contrôle : relit le fichier et compte les lignes. */
-const back = XLSX.read(new Uint8Array(readFileSync(outPath)), { type: "array" });
-const readRows = XLSX.utils.sheet_to_json(back.Sheets[back.SheetNames[0]], { header: 1 });
-console.log(`\nRelecture OK : ${readRows.length - 1} lignes de données.`);
+const appPath = join(HERE, "app.js");
+const app = readFileSync(appPath, "utf8");
+// [\s\S]*? = « n'importe quoi, même rien, même sur plusieurs lignes ».
+const repere = /(\/\/ <exemples-debut>)[\s\S]*?(\/\/ <exemples-fin>)/;
+if (!repere.test(app)) {
+  throw new Error("Repères <exemples-debut> / <exemples-fin> introuvables dans app.js");
+}
+const bloc =
+  jsArray("EXEMPLE_PARCOURS_ROWS", rowsParcours) + "\n\n" + jsArray("EXEMPLE_ADJACENT_ROWS", rowsAdjacent);
+// Fonction de remplacement (et non chaîne) : évite que des "$" éventuels
+// dans les données soient interprétés par replace().
+writeFileSync(appPath, app.replace(repere, (_, debut, fin) => debut + "\n" + bloc + "\n" + fin));
+console.log("app.js mis à jour : EXEMPLE_PARCOURS_ROWS et EXEMPLE_ADJACENT_ROWS.");

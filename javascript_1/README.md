@@ -3,7 +3,7 @@
 Petite application **100 % navigateur, 100 % hors ligne** (HTML + JavaScript,
 aucun serveur, aucune installation, aucun accès internet) qui construit et
 affiche un graphe orienté non pondéré à partir d'un **fichier Excel `.xlsx`**
-(comme `exemple.xlsx`).
+(comme `exemple_parcours.xlsx` ou `exemple_adjacent.xlsx`).
 
 ## Lancer
 
@@ -17,13 +17,27 @@ Double-cliquez sur **`index.html`** (ou ouvrez-le dans un navigateur).
 | Action | Comment |
 | --- | --- |
 | Charger un fichier | Bouton **« Importer un .xlsx »** ou **glisser-déposer** le fichier sur la zone centrale |
-| Voir la démo | Bouton **« Charger l'exemple »** (données de `exemple.xlsx` intégrées au code) |
+| Voir la démo | Boutons **« Exemple parcours »** et **« Exemple adjacent »** (données de `exemple_parcours.xlsx` / `exemple_adjacent.xlsx` intégrées au code) |
 | Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (vert) et *prédécesseurs* (jaune) sont mis en évidence, avec leur **transformation** (`txn_dta`) dans deux tableaux du panneau latéral |
 | Changer la disposition | Menu **« Mise en page »** (hiérarchique, cercle, forces…) |
 | Exporter | Bouton **« Exporter PNG »** |
 
-Les nœuds `edg_*` sont en **bleu**, les nœuds « données » `dta_*` en **violet**,
-les nœuds de typologie **Parcours** en **orange** (couleur unique, prioritaire).
+### Mode d'affichage : suffixe du nom du fichier
+
+Le nom du fichier importé doit se terminer (juste avant `.xlsx`) par
+**`parcours`** ou **`adjacent`** — casse ignorée, séparateur libre
+(`lineage_parcours.xlsx`, `Flux-Adjacent.xlsx`…) :
+
+| Suffixe | Nœuds « données » `dta_*` | Nœuds `edg_*` |
+| --- | --- | --- |
+| `…_parcours.xlsx` | **jaune** (ce sont tous des parcours) | **jaune** |
+| `…_adjacent.xlsx` | **jaune** (nœuds source = parcours) | **bleu** (neutres) |
+| autre nom | violet | bleu |
+
+Le mode détecté est affiché à côté du nom du fichier. En mode adjacent, un nœud
+présent à la fois en `dta_*` et en `edg_*` est jaune.
+
+Au clic sur un nœud : successeurs en **vert**, prédécesseurs en **orange**.
 
 Les arcs **avec** transformation (`txn_dta` renseigné) sont en **trait plein
 rouge vif** ; les arcs **sans** transformation en **pointillé gris**.
@@ -32,10 +46,10 @@ rouge vif** ; les arcs **sans** transformation en **pointillé gris**.
 
 Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
 
-| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` | `txn_dta` | `Typos` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 | agrégation | Complete |
-| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 | filtre | Parcours |
+| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` | `txn_dta` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 | agrégation |
+| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 | filtre |
 
 Chaque ligne définit **deux nœuds** et **une arête** entre eux :
 
@@ -63,16 +77,7 @@ Tolérances de lecture :
 - morceaux `dta_*` / `edg_*` vides ignorés dans la concaténation ;
 - ligne dont le nœud « données » ou « edg » est entièrement vide : ignorée ;
 - colonne `txn_dta` optionnelle : absente ou vide → transformation affichée
-  comme « — » et arc dessiné en pointillé ;
-- colonne **`Typos`** optionnelle (tout en-tête contenant `typo`), valeurs
-  `Parcours` ou `Complete` (seule la 1re lettre compte, casse ignorée). Elle
-  s'applique aux **deux nœuds** de la ligne ; un nœud présent sur plusieurs
-  lignes est « Parcours » dès qu'**une** de ses lignes l'est. Les nœuds
-  « Parcours » sont tous colorés en **orange** ; `Complete`, vide ou absente →
-  couleur normale (bleu / violet).
-  **Règle** : un nœud `Complete` est une **feuille** (aucun successeur). Les
-  violations sont comptées dans la statistique « Complete non feuilles »
-  (détail dans la console F12).
+  comme « — » et arc dessiné en pointillé.
 
 ## Partager à des utilisateurs (sans leur donner le code source)
 
@@ -83,7 +88,7 @@ Le dossier **`dist/`** contient une version prête à distribuer :
 | `graphe.html` | **Un seul fichier autonome** (~900 Ko) : HTML + CSS + JS de l'appli **minifiés** + les librairies, tout intégré. Aucun `.js` lisible à côté, **aucun accès internet** |
 | `Ouvrir le graphe.bat` | Windows : double-clic → ouvre `graphe.html` dans le navigateur |
 | `Ouvrir le graphe.command` | macOS/Linux : idem (1er lancement : clic droit → Ouvrir) |
-| `exemple.xlsx`, `LISEZ-MOI.txt` | jeu de démo + notice |
+| `exemple_parcours.xlsx`, `exemple_adjacent.xlsx`, `LISEZ-MOI.txt` | jeux de démo + notice |
 
 **Pour partager** : copiez le dossier `dist/` sur une clé USB, un lecteur réseau
 ou un `.zip` par mail. L'utilisateur double-clique le lanceur — aucun outil à
@@ -118,7 +123,7 @@ téléchargées : le build réutilise les copies de `vendor/`.
    Si un fichier de `vendor/` a été renommé/déplacé, ou si une référence externe
    reste dans le HTML, le script s'arrête avec un message d'erreur explicite.
 4. Vérifier : ouvrir `dist/graphe.html` dans un navigateur, cliquer
-   **« Charger l'exemple »**, contrôler que le graphe s'affiche.
+   **« Exemple parcours »** puis **« Exemple adjacent »**, contrôler que le graphe s'affiche.
 5. Distribuer : copier **tout le dossier `dist/`** (clé USB, lecteur réseau,
    `.zip`). Ne pas séparer `graphe.html` des lanceurs si on veut le double-clic.
 
@@ -126,19 +131,21 @@ téléchargées : le build réutilise les copies de `vendor/`.
 > pas du code source). Il est donc normal qu'il n'apparaisse pas sur GitHub :
 > chacun le régénère avec `node build.mjs`.
 
-### Régénérer le jeu d'exemple (`exemple.xlsx`)
+### Régénérer les jeux d'exemple (`exemple_parcours.xlsx`, `exemple_adjacent.xlsx`)
 
 Les données de démonstration (≈ 20 lignes) sont décrites dans
-**`generer-exemple.mjs`** (tableau `RECORDS`). Après modification :
+**`generer-exemple.mjs`** (tableaux `RECORDS_PARCOURS` et `RECORDS_ADJACENT`). Après modification :
 
 ```
 node generer-exemple.mjs
 ```
 
-Le script réécrit `exemple.xlsx` **et** affiche le tableau `EXEMPLE_ROWS` à
-recopier dans `app.js` (le bouton « Charger l'exemple » lit ces lignes
-intégrées, pas le fichier). Fermez `exemple.xlsx` dans Excel avant de lancer
-le script (sinon « fichier verrouillé »).
+Le script réécrit les deux `.xlsx` **et** met à jour tout seul les tableaux
+`EXEMPLE_PARCOURS_ROWS` / `EXEMPLE_ADJACENT_ROWS` dans `app.js` (entre les
+repères `// <exemples-debut>` et `// <exemples-fin>`) : les boutons « Exemple
+parcours » / « Exemple adjacent » lisent ces lignes intégrées, pas les
+fichiers. Fermez les `.xlsx` dans Excel avant de lancer le script (sinon
+« fichier verrouillé »).
 
 ### Mettre à jour une librairie
 
@@ -159,9 +166,10 @@ le script (sinon « fichier verrouillé »).
 | `style.css` | Thème sombre, mise en page |
 | `app.js` | Lecture du `.xlsx`, construction du graphe, rendu cytoscape, statistiques, interactions |
 | `build.mjs` | Génère `dist/` (fichier unique autonome minifié + lanceurs) |
-| `generer-exemple.mjs` | (Re)génère `exemple.xlsx` + le tableau `EXEMPLE_ROWS` de `app.js` |
+| `generer-exemple.mjs` | (Re)génère les deux `.xlsx` d'exemple + les tableaux `EXEMPLE_PARCOURS_ROWS` / `EXEMPLE_ADJACENT_ROWS` de `app.js` |
 | `vendor/` | Librairies (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
-| `exemple.xlsx` | Jeu de démonstration : 20 lignes → 19 nœuds, 20 arêtes, avec un cycle ; feuilles DI..DM en `Complete`, le reste en `Parcours` |
+| `exemple_parcours.xlsx` | Démo mode parcours : 10 lignes → une seule ligne de 11 nœuds (tous jaunes) DA → EA → DB → … → DF, 10 arêtes (7 pleines, 3 pointillées) |
+| `exemple_adjacent.xlsx` | Démo mode adjacent : 6 nœuds jaunes qui se suivent DA → DB → DC → DD → DE → DF + 6 traitements voisins EA..EF (bleus), un par donnée → 12 nœuds, 11 arêtes (7 pleines, 4 pointillées) |
 
 ## Déboguer
 
@@ -191,7 +199,7 @@ Touches : `F10` (ligne suivante), `F11` (entrer dans la fonction), `F8`
 | Outil | Usage |
 | --- | --- |
 | Onglet **Console** | erreurs en rouge (clique la ligne `app.js:123`) ; messages `console.warn` du code |
-| **Console** (saisie directe) | tester une fonction : `rowsToGraph(EXEMPLE_ROWS)`, `computeStats(currentData)`, `cy.nodes().length` |
+| **Console** (saisie directe) | tester une fonction : `rowsToGraph(EXEMPLE_PARCOURS_ROWS)`, `computeStats(currentData)`, `cy.nodes().length` |
 | Onglet **Sources** | poser ses propres points d'arrêt en cliquant un numéro de ligne |
 | Onglet **Network** | vérifier que `vendor/*.js` se chargent en `200` (un `404` = chemin cassé) |
 | Onglet **Elements** | inspecter le HTML réel ; vérifier qu'un `id` existe |
@@ -425,7 +433,7 @@ Pourquoi c'est le meilleur choix ici :
 2. Dans l'arborescence de gauche, supprimer les fichiers d'exemple, puis
    **glisser-déposer** le dossier `javascript/` (au minimum `index.html`,
    `app.js`, `style.css`, `vendor/`).
-3. L'aperçu de droite affiche la page. Cliquer **« Charger l'exemple »** pour
+3. L'aperçu de droite affiche la page. Cliquer **« Exemple parcours »** pour
    vérifier.
 4. Modifier `app.js` : la page se recharge toute seule.
 

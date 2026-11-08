@@ -6,7 +6,7 @@
      2. minifie le CSS (regex) et le JS de l'appli (terser via npx)
      3. produit UN SEUL fichier dist/graphe.html : CSS, librairies et JS
         tous intégrés -> AUCUN accès internet, aucun fichier .js à côté
-     4. copie exemple.xlsx et crée les lanceurs double-clic (.bat / .command)
+     4. copie exemple_parcours.xlsx + exemple_adjacent.xlsx et crée les lanceurs double-clic (.bat / .command)
 
    Lancer :  node build.mjs
    Pré-requis : Node.js + accès npm (npx télécharge terser au 1er appel).
@@ -83,7 +83,8 @@ if (/\ssrc="(vendor\/|app\.js)|href="style\.css"/.test(out)) {
 writeFileSync(join(DIST, "graphe.html"), out);
 
 /* --- 4. Fichiers d'accompagnement ------------------------------- */
-copyFileSync(join(HERE, "exemple.xlsx"), join(DIST, "exemple.xlsx"));
+copyFileSync(join(HERE, "exemple_parcours.xlsx"), join(DIST, "exemple_parcours.xlsx"));
+copyFileSync(join(HERE, "exemple_adjacent.xlsx"), join(DIST, "exemple_adjacent.xlsx"));
 
 // Lanceur Windows : ouvre graphe.html dans le navigateur par défaut.
 writeFileSync(
@@ -111,7 +112,11 @@ writeFileSync(
     "Fonctionne 100 % hors ligne (aucune connexion internet requise).",
     "",
     "Chargez votre fichier Excel .xlsx (bouton ou glisser-déposer),",
-    "ou cliquez « Charger l'exemple ».",
+    "ou cliquez « Exemple parcours » / « Exemple adjacent ».",
+    "",
+    "Le nom du fichier doit finir par _parcours ou _adjacent :",
+    "  ..._parcours.xlsx -> tous les nœuds en jaune",
+    "  ..._adjacent.xlsx -> nœuds données en jaune, nœuds edg en bleu",
   ].join("\n") + "\n"
 );
 

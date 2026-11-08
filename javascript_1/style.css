@@ -14,7 +14,7 @@
   --accent-strong: #4f8cff;
   --node: #6ea8fe;
   --succ: #34d399;
-  --pred: #fbbf24;
+  --pred: #f97316;
   --danger: #f87171;
   --radius: 12px;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
@@ -220,9 +220,9 @@ code {
 .swatch-pred {
   background: var(--pred);
 }
-/* Nœuds « Parcours » (colonne Typos) : même orange que dans app.js */
+/* Nœuds « parcours » (suffixe du fichier) : même jaune que dans app.js */
 .swatch-parcours {
-  background: #fb923c;
+  background: #fde047;
 }
 
 /* Petits traits de légende pour les arcs */

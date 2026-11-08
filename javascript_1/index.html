@@ -32,7 +32,8 @@
           Importer un .xlsx
           <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
         </label>
-        <button type="button" class="btn btn-ghost" id="example-btn">Charger l'exemple</button>
+        <button type="button" class="btn btn-ghost" id="example-parcours-btn">Exemple parcours</button>
+        <button type="button" class="btn btn-ghost" id="example-adjacent-btn">Exemple adjacent</button>
       </div>
     </header>
 
@@ -43,7 +44,7 @@
           <div class="dropzone-inner">
             <div class="dropzone-icon">⇪</div>
             <p class="dropzone-title">Glissez-déposez votre fichier Excel <code>.xlsx</code> ici</p>
-            <p class="dropzone-hint">ou utilisez « Importer un .xlsx » / « Charger l'exemple »</p>
+            <p class="dropzone-hint">ou utilisez « Importer un .xlsx » / « Exemple parcours » / « Exemple adjacent »</p>
           </div>
         </div>
 
@@ -55,7 +56,7 @@
         <div class="legend" id="legend" hidden>
           <span><i class="swatch swatch-edg"></i> nœud edg</span>
           <span><i class="swatch swatch-dta"></i> nœud données</span>
-          <span><i class="swatch swatch-parcours"></i> typos Parcours</span>
+          <span><i class="swatch swatch-parcours"></i> nœud parcours</span>
           <span><i class="edge-line edge-txn"></i> arc avec transformation</span>
           <span><i class="edge-line edge-sans-txn"></i> arc sans transformation</span>
           <span><i class="swatch swatch-sel"></i> sélection</span>
