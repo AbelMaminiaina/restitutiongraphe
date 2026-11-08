@@ -8,13 +8,14 @@
      navigateur (FileReader -> ArrayBuffer -> XLSX.read).
 
    ------------------------------------------------------------------
-   GUIDE DE LECTURE (le fichier est découpé en 9 sections)
+   GUIDE DE LECTURE (le fichier est découpé en 10 sections)
    ------------------------------------------------------------------
    Faciles (commence par là) :
      3. Références DOM         - on récupère les éléments HTML par leur id
      4. LAYOUT_CONFIGS         - réglages de mise en page (simple objet)
      8. loadGraph / loadFile   - l'enchaînement quand on charge un fichier
      9. Câblage des événements - « quand on clique X, faire Y »
+    10. Démarrage             - attend que la page soit prête (DOMContentLoaded)
      renderStats               - fabrique le HTML du panneau statistiques
 
    Un peu plus techniques :
@@ -312,28 +313,39 @@ function workbookBufferToGraph(buffer) {
 
 /* ------------------------------------------------------------------
    3. Références vers les éléments du DOM (le HTML)
+   ------------------------------------------------------------------
+   app.js est chargé dans le <head> : quand il s'exécute, le <body> n'est
+   PAS ENCORE construit (les boutons, le <div id="cy">... n'existent pas).
+   On déclare donc les variables ici (vides), et on les remplit plus tard
+   dans getDomRefs(), appelée au démarrage (voir la section 10 tout en bas)
+   une fois la page entièrement construite.
 ------------------------------------------------------------------ */
-const stage = document.getElementById("stage");
-const dropzone = document.getElementById("dropzone");
-const stageError = document.getElementById("stage-error");
-const legend = document.getElementById("legend");
-const fileInput = document.getElementById("file-input");
-const exampleParcoursBtn = document.getElementById("example-parcours-btn");
-const exampleAdjacentBtn = document.getElementById("example-adjacent-btn");
-const fileNameEl = document.getElementById("file-name");
-const layoutSelect = document.getElementById("layout-select");
-const fitBtn = document.getElementById("fit-btn");
-const pngBtn = document.getElementById("png-btn");
+let stage, dropzone, stageError, legend, fileInput,
+  exampleParcoursBtn, exampleAdjacentBtn, fileNameEl, layoutSelect, fitBtn,
+  pngBtn, selectionHint, selectionDetail, selIdEl, succCountEl,
+  predCountEl, succTableBodyEl, predTableBodyEl, statsEl;
 
-const selectionHint = document.getElementById("selection-hint");
-const selectionDetail = document.getElementById("selection-detail");
-const selIdEl = document.getElementById("sel-id");
-const succCountEl = document.getElementById("succ-count");
-const predCountEl = document.getElementById("pred-count");
-const succTableBodyEl = document.getElementById("succ-table-body");
-const predTableBodyEl = document.getElementById("pred-table-body");
-
-const statsEl = document.getElementById("stats");
+function getDomRefs() {
+  stage = document.getElementById("stage");
+  dropzone = document.getElementById("dropzone");
+  stageError = document.getElementById("stage-error");
+  legend = document.getElementById("legend");
+  fileInput = document.getElementById("file-input");
+  exampleParcoursBtn = document.getElementById("example-parcours-btn");
+  exampleAdjacentBtn = document.getElementById("example-adjacent-btn");
+  fileNameEl = document.getElementById("file-name");
+  layoutSelect = document.getElementById("layout-select");
+  fitBtn = document.getElementById("fit-btn");
+  pngBtn = document.getElementById("png-btn");
+  selectionHint = document.getElementById("selection-hint");
+  selectionDetail = document.getElementById("selection-detail");
+  selIdEl = document.getElementById("sel-id");
+  succCountEl = document.getElementById("succ-count");
+  predCountEl = document.getElementById("pred-count");
+  succTableBodyEl = document.getElementById("succ-table-body");
+  predTableBodyEl = document.getElementById("pred-table-body");
+  statsEl = document.getElementById("stats");
+}
 
 /* État global de l'application */
 let cy = null;            // instance cytoscape en cours
@@ -853,17 +865,7 @@ function hideError() {
   stageError.hidden = true;
 }
 
-/* ------------------------------------------------------------------
-   9. Câblage des événements de l'interface
------------------------------------------------------------------- */
-
-// a) Bouton « Importer un .xlsx »
-fileInput.addEventListener("change", (e) => {
-  loadFile(e.target.files && e.target.files[0]);
-  fileInput.value = ""; // permet de recharger le même fichier ensuite
-});
-
-// b) Boutons « Exemple parcours » et « Exemple adjacent »
+// Charge un exemple intégré (utilisée par les boutons, section 9 b).
 // On passe un nom de fichier « fictif » à modeFromFileName : son suffixe
 // (_parcours / _adjacent) choisit le mode, exactement comme pour un import.
 function loadExample(rows, fileName) {
@@ -873,46 +875,81 @@ function loadExample(rows, fileName) {
     showError(err.message || String(err));
   }
 }
-exampleParcoursBtn.addEventListener("click", () =>
-  loadExample(EXEMPLE_PARCOURS_ROWS, "exemple_parcours.xlsx")
-);
-exampleAdjacentBtn.addEventListener("click", () =>
-  loadExample(EXEMPLE_ADJACENT_ROWS, "exemple_adjacent.xlsx")
-);
 
-// c) Glisser-déposer sur la scène
-stage.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  stage.classList.add("drag-over");
-});
-stage.addEventListener("dragleave", (e) => {
-  // on ne retire la surbrillance que si on quitte vraiment la scène
-  if (!stage.contains(e.relatedTarget)) stage.classList.remove("drag-over");
-});
-stage.addEventListener("drop", (e) => {
-  e.preventDefault();
-  stage.classList.remove("drag-over");
-  loadFile(e.dataTransfer.files && e.dataTransfer.files[0]);
-});
+/* ------------------------------------------------------------------
+   9. Câblage des événements de l'interface
+------------------------------------------------------------------ */
+function wireEvents() {
+  // a) Bouton « Importer un .xlsx »
+  fileInput.addEventListener("change", (e) => {
+    loadFile(e.target.files && e.target.files[0]);
+    fileInput.value = ""; // permet de recharger le même fichier ensuite
+  });
 
-// d) Changement de disposition
-layoutSelect.addEventListener("change", () => {
-  if (!cy) return;
-  const config = LAYOUT_CONFIGS[layoutSelect.value] || LAYOUT_CONFIGS.dagre;
-  cy.layout(config).run();
-});
+  // b) Boutons « Exemple parcours » et « Exemple adjacent »
+  exampleParcoursBtn.addEventListener("click", () =>
+    loadExample(EXEMPLE_PARCOURS_ROWS, "exemple_parcours.xlsx")
+  );
+  exampleAdjacentBtn.addEventListener("click", () =>
+    loadExample(EXEMPLE_ADJACENT_ROWS, "exemple_adjacent.xlsx")
+  );
 
-// e) Recentrer le graphe
-fitBtn.addEventListener("click", () => {
-  if (cy) cy.animate({ fit: { padding: 40 }, duration: 250 });
-});
+  // c) Glisser-déposer sur la scène
+  stage.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    stage.classList.add("drag-over");
+  });
+  stage.addEventListener("dragleave", (e) => {
+    // on ne retire la surbrillance que si on quitte vraiment la scène
+    if (!stage.contains(e.relatedTarget)) stage.classList.remove("drag-over");
+  });
+  stage.addEventListener("drop", (e) => {
+    e.preventDefault();
+    stage.classList.remove("drag-over");
+    loadFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
 
-// f) Export PNG
-pngBtn.addEventListener("click", () => {
-  if (!cy) return;
-  const png = cy.png({ full: true, scale: 2, bg: "#0f1420" });
-  const a = document.createElement("a");
-  a.href = png;
-  a.download = "graphe.png";
-  a.click();
-});
+  // d) Changement de disposition
+  layoutSelect.addEventListener("change", () => {
+    if (!cy) return;
+    const config = LAYOUT_CONFIGS[layoutSelect.value] || LAYOUT_CONFIGS.dagre;
+    cy.layout(config).run();
+  });
+
+  // e) Recentrer le graphe
+  fitBtn.addEventListener("click", () => {
+    if (cy) cy.animate({ fit: { padding: 40 }, duration: 250 });
+  });
+
+  // f) Export PNG
+  pngBtn.addEventListener("click", () => {
+    if (!cy) return;
+    const png = cy.png({ full: true, scale: 2, bg: "#0f1420" });
+    const a = document.createElement("a");
+    a.href = png;
+    a.download = "graphe.png";
+    a.click();
+  });
+}
+
+/* ------------------------------------------------------------------
+   10. Démarrage
+   ------------------------------------------------------------------
+   « DOMContentLoaded » = l'événement envoyé par le navigateur quand tout
+   le HTML a été lu et que les éléments de la page existent. On attend ce
+   moment pour récupérer les éléments (getDomRefs) et brancher les clics
+   (wireEvents). C'est ce qui permet de mettre <script src="app.js"> dans
+   le <head>.
+   (Si la page est déjà prête — readyState différent de "loading" — on
+   démarre tout de suite.)
+------------------------------------------------------------------ */
+function startApp() {
+  getDomRefs();
+  wireEvents();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startApp);
+} else {
+  startApp();
+}
