@@ -242,7 +242,7 @@ fichiers. Fermez les `.xlsx` dans Excel avant de lancer le script (sinon
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.html` | Structure de la page + chargement des librairies locales |
+| `index.html` | Structure de la page + chargement, dans le `<head>`, des librairies locales puis de `app.js` |
 | `style.css` | Thème sombre, mise en page |
 | `app.js` | Lecture du `.xlsx`, construction du graphe, rendu cytoscape, statistiques, interactions |
 | `build.mjs` | Génère `dist/` (fichier unique autonome minifié + lanceurs) |
@@ -285,8 +285,11 @@ Touches : `F10` (ligne suivante), `F11` (entrer dans la fonction), `F8`
 | Onglet **Elements** | inspecter le HTML réel ; vérifier qu'un `id` existe |
 | `console.table(rows)` | afficher un tableau lisible |
 
-Erreurs fréquentes : `XLSX is not defined` → un `<script vendor/>` non chargé ;
-`Cannot read properties of null` → un `id` HTML absent / mal écrit ;
+Erreurs fréquentes : `XLSX is not defined` → un `<script vendor/>` non chargé,
+ou placé **après** `app.js` ;
+`Cannot read properties of null` → un `id` HTML absent / mal écrit, ou un
+`document.getElementById(…)` ajouté **hors** de `getDomRefs()` (il s'exécute
+alors avant que la page existe, voir « Chargement de `app.js` dans le `<head>` ») ;
 « Colonnes attendues introuvables » → mauvaises colonnes dans le `.xlsx`.
 
 ### VS Code
@@ -296,7 +299,7 @@ Extension **Live Server** → bouton **« Go Live »** : sert la page sur
 
 ## Comprendre le code
 
-`app.js` commence par un **guide de lecture** : les 9 sections classées de la
+`app.js` commence par un **guide de lecture** : les 10 sections classées de la
 plus simple à la plus technique, l'ordre conseillé, et un rappel de vocabulaire
 (graphe orienté, successeur/prédécesseur, degré, cycle…).
 
@@ -350,6 +353,43 @@ Le chargement de fichier reste géré avec `FileReader` + callback `onload`.
 > À ne pas confondre avec les fichiers `*.mjs` (`build.mjs`, `generer-exemple.mjs`…) :
 > ce sont des **modules ES pour Node.js ≥ 18** (`import { … } from "node:fs"`), qui
 > ne s'exécutent jamais dans le navigateur.
+
+### Chargement de `app.js` dans le `<head>`
+
+Dans `index.html`, `app.js` est chargé dans le **`<head>`**, juste **après** les
+4 librairies `vendor/` qu'il utilise, **sans `defer`** :
+
+```html
+<head>
+  …
+  <script src="vendor/xlsx.mini.min.js"></script>
+  <script src="app.js"></script>
+</head>
+```
+
+À ce moment-là, le `<body>` n'est **pas encore construit** : les boutons, le
+`<div id="cy">`… n'existent pas. `app.js` attend donc lui-même que la page soit
+prête avant d'y toucher :
+
+| Section de `app.js` | Rôle |
+| --- | --- |
+| 3. `getDomRefs()` | remplit les variables `stage`, `fileInput`, `statsEl`… (déclarées vides en haut) |
+| 9. `wireEvents()` | branche les clics, le glisser-déposer, les menus |
+| 10. Démarrage | appelle `getDomRefs()` puis `wireEvents()` sur l'événement **`DOMContentLoaded`** (HTML entièrement lu), ou tout de suite si la page est déjà prête |
+
+Tout le reste (`rowsToGraph`, `computeStats`, `renderGraph`…) ne touche pas à la
+page au chargement : ce sont des fonctions, appelées plus tard.
+
+**Règles quand on modifie le code :**
+
+- un nouvel élément HTML à manipuler → déclarer la variable avec les autres
+  (section 3) et ajouter son `document.getElementById(…)` **dans `getDomRefs()`** ;
+- un nouveau clic / événement → l'ajouter **dans `wireEvents()`** ;
+- garder `<script src="app.js">` **après** les `<script src="vendor/…">` ;
+- ne pas ajouter `defer` : `build.mjs` cherche exactement
+  `<script src="app.js"></script>`, et `defer` est sans effet sur le script en
+  ligne de `dist/graphe.html`. Le démarrage sur `DOMContentLoaded` marche, lui,
+  dans les deux cas.
 
 ## Développer `app.js` hors ligne
 
@@ -480,6 +520,9 @@ Sans contexte, n'importe quelle IA propose du React, du TypeScript, des
 ```
 Contraintes pour app.js :
 - JavaScript vanilla, <script> classique : PAS de module, PAS d'import/export.
+- app.js est chargé dans le <head> (sans defer) : tout getElementById va dans
+  getDomRefs(), tout addEventListener d'interface dans wireEvents()
+  (lancés sur DOMContentLoaded, section 10).
 - ES2015 (ES6) maximum : interdit ?. , ?? , async/await, class,
   Array.includes / .at() / .flat() , Object.entries / fromEntries.
 - Aucun framework, aucun build, aucune nouvelle dépendance
