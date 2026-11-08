@@ -42,6 +42,85 @@ Au clic sur un nœud : successeurs en **vert**, prédécesseurs en **orange**.
 Les arcs **avec** transformation (`txn_dta` renseigné) sont en **trait plein
 rouge vif** ; les arcs **sans** transformation en **pointillé gris**.
 
+## Les exemples fournis
+
+Deux fichiers d'exemple, un par mode, servent de démonstration **et de modèle**
+pour construire vos propres fichiers. Ils sont aussi intégrés au site : boutons
+**« Exemple parcours »** et **« Exemple adjacent »** (aucun fichier à ouvrir).
+
+> Dans les tableaux ci-dessous, « DA » désigne les 4 morceaux `DA1`..`DA4`
+> (colonnes `dta_1`..`dta_4` ou `edg_1`..`edg_4`) ; le nœud affiché s'appelle
+> `DA4.DA3.DA2.DA1`. « — » = `txn_dta` vide (arc en pointillé).
+
+### `exemple_parcours.xlsx` — un parcours = une ligne
+
+Un parcours se lit d'un bout à l'autre, **sans embranchement ni boucle** : chaque
+nœud a au plus un prédécesseur et un successeur. Données (`D…`) et traitements
+(`E…`) alternent ; tous les nœuds sont **jaunes**.
+
+```
+DA → EA → DB → EB → DC → EC → DD → ED → DE → EE → DF
+```
+
+| données (`dta_*`) | `edg_dir` | edg (`edg_*`) | `txn_dta` | arc obtenu |
+| --- | --- | --- | --- | --- |
+| DA | `I` | EA | filtre | DA → EA |
+| DB | `O` | EA | agrégation | EA → DB |
+| DB | `I` | EB | — | DB → EB |
+| DC | `O` | EB | jointure | EB → DC |
+| DC | `I` | EC | tri | DC → EC |
+| DD | `O` | EC | — | EC → DD |
+| DD | `I` | ED | calcul | DD → ED |
+| DE | `O` | ED | normalisation | ED → DE |
+| DE | `I` | EE | — | DE → EE |
+| DF | `O` | EE | déduplication | EE → DF |
+
+Résultat : **11 nœuds** (tous jaunes), **10 arcs** (7 pleins, 3 pointillés).
+Astuce : menu « Mise en page » → **« Hiérarchique (de gauche à droite) »** pour
+voir la ligne à l'horizontale.
+
+### `exemple_adjacent.xlsx` — les nœuds parcours se suivent, les edg à côté
+
+Les nœuds du parcours (**jaunes**) **se suivent directement**, arc après arc ;
+les traitements adjacents (nœuds `edg`, **bleus**, neutres) sont branchés à
+côté, un par donnée :
+
+```
+EA → DA → DB → DC → DD → DE → DF → EF
+          ↓    ↓    ↑    ↓
+          EB   EC   ED   EE
+```
+
+Pour relier **deux données directement** (DA → DB), la donnée de départ est
+écrite dans les colonnes **`edg_1`..`edg_4`** : la ligne `DB | O | DA` donne
+l'arc DA → DB. Un nœud présent à la fois en `dta_*` et en `edg_*` est jaune en
+mode adjacent.
+
+| données (`dta_*`) | `edg_dir` | edg (`edg_*`) | `txn_dta` | arc obtenu |
+| --- | --- | --- | --- | --- |
+| DB | `O` | DA | filtre | DA → DB |
+| DC | `O` | DB | — | DB → DC |
+| DD | `O` | DC | jointure | DC → DD |
+| DE | `O` | DD | calcul | DD → DE |
+| DF | `O` | DE | — | DE → DF |
+| DA | `O` | EA | chargement | EA → DA |
+| DB | `I` | EB | — | DB → EB |
+| DC | `I` | EC | copie | DC → EC |
+| DD | `O` | ED | — | ED → DD |
+| DE | `I` | EE | tri | DE → EE |
+| DF | `I` | EF | export | DF → EF |
+
+Résultat : **12 nœuds** (6 jaunes DA..DF, 6 bleus EA..EF), **11 arcs**
+(7 pleins, 4 pointillés).
+
+### Faire son propre fichier
+
+1. Partir de l'exemple du bon mode (copier `exemple_parcours.xlsx` ou
+   `exemple_adjacent.xlsx`).
+2. **Garder la fin du nom** : `…_parcours.xlsx` ou `…_adjacent.xlsx` (c'est elle
+   qui choisit les couleurs).
+3. Remplacer les valeurs ligne par ligne, en gardant la ligne d'en-tête.
+
 ## Format du fichier Excel attendu
 
 Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
@@ -133,7 +212,8 @@ téléchargées : le build réutilise les copies de `vendor/`.
 
 ### Régénérer les jeux d'exemple (`exemple_parcours.xlsx`, `exemple_adjacent.xlsx`)
 
-Les données de démonstration (≈ 20 lignes) sont décrites dans
+Les données de démonstration (10 et 11 lignes, voir « Les exemples fournis »)
+sont décrites dans
 **`generer-exemple.mjs`** (tableaux `RECORDS_PARCOURS` et `RECORDS_ADJACENT`). Après modification :
 
 ```
