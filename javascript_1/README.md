@@ -42,6 +42,28 @@ Au clic sur un nœud : successeurs en **vert**, prédécesseurs en **orange**.
 Les arcs **avec** transformation (`txn_dta` renseigné) sont en **trait plein
 rouge vif** ; les arcs **sans** transformation en **pointillé gris**.
 
+### Halo jaune autour du parcours
+
+Pour faire ressortir le parcours, un **halo jaune** (couleur transparente
+dessinée **autour** de l'élément) est ajouté :
+
+| Élément | Halo ? |
+| --- | --- |
+| nœud parcours (jaune) | **oui** |
+| arc dont les **deux** bouts sont des nœuds parcours | **oui** — le trait lui-même ne change pas (plein rouge ou pointillé) |
+| nœud non parcours | non (inchangé) |
+| arc dont **un** bout n'est pas parcours | non (inchangé) |
+
+Donc en mode **parcours** tout le graphe a un halo ; en mode **adjacent**,
+seule la suite des nœuds jaunes et les arcs entre eux en ont un ; sans
+suffixe, aucun halo.
+
+Réglage dans `app.js` (fonction `renderGraph`, règles `node[parcours = "oui"]`
+et `edge[parcours = "oui"]`) : `"underlay-padding"` = taille du halo en pixels
+(9 pour les nœuds, 6 pour les arcs), `"underlay-opacity"` = intensité, de 0
+(invisible) à 1 (opaque), 0.35 par défaut. Pour la légende, garder la même
+couleur dans `style.css` (`.swatch-parcours`, `.edge-parcours`).
+
 ## Les exemples fournis
 
 Deux fichiers d'exemple, un par mode, servent de démonstration **et de modèle**
@@ -75,7 +97,8 @@ DA → EA → DB → EB → DC → EC → DD → ED → DE → EE → DF
 | DE | `I` | EE | — | DE → EE |
 | DF | `O` | EE | déduplication | EE → DF |
 
-Résultat : **11 nœuds** (tous jaunes), **10 arcs** (7 pleins, 3 pointillés).
+Résultat : **11 nœuds** (tous jaunes), **10 arcs** (7 pleins, 3 pointillés) ;
+halo sur tous les nœuds et tous les arcs.
 Astuce : menu « Mise en page » → **« Hiérarchique (de gauche à droite) »** pour
 voir la ligne à l'horizontale.
 
@@ -111,7 +134,8 @@ mode adjacent.
 | DF | `I` | EF | export | DF → EF |
 
 Résultat : **12 nœuds** (6 jaunes DA..DF, 6 bleus EA..EF), **11 arcs**
-(7 pleins, 4 pointillés).
+(7 pleins, 4 pointillés) ; halo sur les 6 nœuds jaunes et les 5 arcs
+DA → DB → … → DF, pas sur EA..EF ni sur leurs arcs.
 
 ### Faire son propre fichier
 
