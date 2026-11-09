@@ -223,6 +223,8 @@ code {
 /* Nœuds « parcours » (suffixe du fichier) : même jaune que dans app.js */
 .swatch-parcours {
   background: #fde047;
+  /* halo jaune autour, comme dans le graphe (underlay de cytoscape) */
+  box-shadow: 0 0 0 4px rgba(253, 224, 71, 0.35);
 }
 
 /* Petits traits de légende pour les arcs */
@@ -236,6 +238,11 @@ code {
 }
 .edge-sans-txn {
   border-top: 2px dashed #8796b5; /* pointillé : pas de transformation */
+}
+/* Arc entre deux nœuds parcours : le trait est inchangé, avec un halo jaune */
+.edge-parcours {
+  border-top: 3px solid #f43f5e;
+  box-shadow: 0 0 0 4px rgba(253, 224, 71, 0.35);
 }
 
 /* ---------- Panneau latéral ---------- */

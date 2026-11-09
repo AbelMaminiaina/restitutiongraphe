@@ -422,6 +422,10 @@ function renderGraph(data, mode = "") {
     cy = null;
   }
 
+  // Ensemble (Set) des nœuds « parcours » : sert à savoir, pour chaque arc,
+  // si ses DEUX bouts sont des nœuds parcours (=> arc de parcours, avec halo).
+  const parcoursIds = new Set(data.nodes.filter((n) => isParcoursNode(n, mode)).map((n) => n.id));
+
   // cytoscape veut UNE seule liste mêlant nœuds et arêtes, chacun sous la
   // forme { data: {...} }. Le "..." (spread) déverse le contenu d'un tableau
   // dans un autre : ici, tous les nœuds puis toutes les arêtes.
@@ -443,6 +447,8 @@ function renderGraph(data, mode = "") {
         source: e.source,
         target: e.target,
         txn: e.txn || "",
+        // "oui" si l'arc relie DEUX nœuds parcours (source ET cible) => halo.
+        parcours: parcoursIds.has(e.source) && parcoursIds.has(e.target) ? "oui" : "non",
       },
     })),
   ];
@@ -478,7 +484,20 @@ function renderGraph(data, mode = "") {
       // de sélection (selected / succ / pred) pour que le clic reste visible.
       {
         selector: 'node[parcours = "oui"]',
-        style: { "background-color": "#fde047", "border-color": "#713f12", "border-width": 3 },
+        style: {
+          "background-color": "#fde047",
+          "border-color": "#713f12",
+          "border-width": 3,
+          // HALO : une couleur jaune dessinée AUTOUR du nœud (« underlay » =
+          // sous-couche plus grande que le nœud, derrière lui).
+          //   underlay-padding : de combien le halo dépasse (en pixels) ;
+          //   underlay-opacity : 0 = invisible, 1 = opaque ;
+          //   underlay-shape   : même forme ronde que le nœud.
+          "underlay-color": "#fde047",
+          "underlay-padding": 9,
+          "underlay-opacity": 0.35,
+          "underlay-shape": "ellipse",
+        },
       },
       {
         selector: "edge",
@@ -503,6 +522,18 @@ function renderGraph(data, mode = "") {
           "line-color": "#f43f5e",
           "target-arrow-color": "#f43f5e",
           "line-style": "solid",
+        },
+      },
+      // Arc qui relie DEUX nœuds parcours : même HALO jaune autour de l'arc.
+      // Le trait lui-même ne change pas (plein rouge ou pointillé gris,
+      // selon txn_dta) : on ajoute seulement la couleur « aux alentours ».
+      // Un arc dont un bout n'est pas parcours reste comme avant (sans halo).
+      {
+        selector: 'edge[parcours = "oui"]',
+        style: {
+          "underlay-color": "#fde047",
+          "underlay-padding": 6,
+          "underlay-opacity": 0.35,
         },
       },
       // Nœud cliqué
