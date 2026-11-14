@@ -13,7 +13,7 @@
   --accent: #6ea8fe;
   --accent-strong: #4f8cff;
   --node: #6ea8fe;
-  --succ: #34d399;
+  --succ: #22d3ee; /* cyan : successeurs (le vert est pris par le caractère V) */
   --pred: #f97316;
   --danger: #f87171;
   --radius: 12px;
@@ -220,6 +220,20 @@ code {
 .swatch-pred {
   background: var(--pred);
 }
+/* Couleur des nœuds selon leur caractère : mêmes couleurs que les règles
+   node[cara = "…"] de app.js */
+.swatch-cara-v {
+  background: #22c55e; /* V : vert */
+}
+.swatch-cara-c {
+  background: #9ca3af; /* C : gris */
+}
+.swatch-cara-r {
+  background: #ef4444; /* R : rouge */
+}
+.swatch-cara-u {
+  background: #3b82f6; /* U : bleu */
+}
 /* Nœuds « parcours » (suffixe du fichier) : même jaune que dans app.js */
 .swatch-parcours {
   background: #fde047;
@@ -238,6 +252,11 @@ code {
 }
 .edge-sans-txn {
   border-top: 2px dashed #8796b5; /* pointillé : pas de transformation */
+}
+/* Arc ajouté par le filtre « Caractère » : plein gris clair, sans flèche
+   (même couleur que la règle edge.cara-edge de app.js) */
+.edge-cara {
+  border-top: 3px solid #94a3b8;
 }
 /* Arc entre deux nœuds parcours : le trait est inchangé, avec un halo jaune */
 .edge-parcours {
@@ -475,7 +494,7 @@ code {
 }
 
 .stat-value.ok {
-  color: var(--succ);
+  color: #34d399; /* vert « OK » (indépendant de la couleur des successeurs) */
 }
 
 /* ---------- Responsive ---------- */

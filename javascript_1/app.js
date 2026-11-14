@@ -75,34 +75,39 @@ function brk(label) {
 ------------------------------------------------------------------ */
 // <exemples-debut>
 const EXEMPLE_PARCOURS_ROWS = [
-  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"],
-  ["DA1", "DA2", "DA3", "DA4", "I", "EA1", "EA2", "EA3", "EA4", "filtre"],
-  ["DB1", "DB2", "DB3", "DB4", "O", "EA1", "EA2", "EA3", "EA4", "agrégation"],
-  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", ""],
-  ["DC1", "DC2", "DC3", "DC4", "O", "EB1", "EB2", "EB3", "EB4", "jointure"],
-  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "tri"],
-  ["DD1", "DD2", "DD3", "DD4", "O", "EC1", "EC2", "EC3", "EC4", ""],
-  ["DD1", "DD2", "DD3", "DD4", "I", "ED1", "ED2", "ED3", "ED4", "calcul"],
-  ["DE1", "DE2", "DE3", "DE4", "O", "ED1", "ED2", "ED3", "ED4", "normalisation"],
-  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", ""],
-  ["DF1", "DF2", "DF3", "DF4", "O", "EE1", "EE2", "EE3", "EE4", "déduplication"],
+  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta", "CARA_VIS_1", "CARA_VIS_2"],
+  ["DA1", "DA2", "DA3", "DA4", "I", "EA1", "EA2", "EA3", "EA4", "filtre", "V", "C"],
+  ["DB1", "DB2", "DB3", "DB4", "O", "EA1", "EA2", "EA3", "EA4", "agrégation", "R", "C"],
+  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", "", "R", "U"],
+  ["DC1", "DC2", "DC3", "DC4", "O", "EB1", "EB2", "EB3", "EB4", "jointure", "C", "U"],
+  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "tri", "C", "V"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "EC1", "EC2", "EC3", "EC4", "", "U", "V"],
+  ["DD1", "DD2", "DD3", "DD4", "I", "ED1", "ED2", "ED3", "ED4", "calcul", "U", "R"],
+  ["DE1", "DE2", "DE3", "DE4", "O", "ED1", "ED2", "ED3", "ED4", "normalisation", "V", "R"],
+  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", "", "V", "C"],
+  ["DF1", "DF2", "DF3", "DF4", "O", "EE1", "EE2", "EE3", "EE4", "déduplication", "R", "C"],
 ];
 
 const EXEMPLE_ADJACENT_ROWS = [
-  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"],
-  ["DB1", "DB2", "DB3", "DB4", "O", "DA1", "DA2", "DA3", "DA4", "filtre"],
-  ["DC1", "DC2", "DC3", "DC4", "O", "DB1", "DB2", "DB3", "DB4", ""],
-  ["DD1", "DD2", "DD3", "DD4", "O", "DC1", "DC2", "DC3", "DC4", "jointure"],
-  ["DE1", "DE2", "DE3", "DE4", "O", "DD1", "DD2", "DD3", "DD4", "calcul"],
-  ["DF1", "DF2", "DF3", "DF4", "O", "DE1", "DE2", "DE3", "DE4", ""],
-  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4", "chargement"],
-  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", ""],
-  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "copie"],
-  ["DD1", "DD2", "DD3", "DD4", "O", "ED1", "ED2", "ED3", "ED4", ""],
-  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", "tri"],
-  ["DF1", "DF2", "DF3", "DF4", "I", "EF1", "EF2", "EF3", "EF4", "export"],
+  ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta", "CARA_VIS_1", "CARA_VIS_2"],
+  ["DB1", "DB2", "DB3", "DB4", "O", "DA1", "DA2", "DA3", "DA4", "filtre", "R", "V"],
+  ["DC1", "DC2", "DC3", "DC4", "O", "DB1", "DB2", "DB3", "DB4", "", "C", "R"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "DC1", "DC2", "DC3", "DC4", "jointure", "U", "C"],
+  ["DE1", "DE2", "DE3", "DE4", "O", "DD1", "DD2", "DD3", "DD4", "calcul", "V", "U"],
+  ["DF1", "DF2", "DF3", "DF4", "O", "DE1", "DE2", "DE3", "DE4", "", "R", "V"],
+  ["DA1", "DA2", "DA3", "DA4", "O", "EA1", "EA2", "EA3", "EA4", "chargement", "V", "C"],
+  ["DB1", "DB2", "DB3", "DB4", "I", "EB1", "EB2", "EB3", "EB4", "", "R", "U"],
+  ["DC1", "DC2", "DC3", "DC4", "I", "EC1", "EC2", "EC3", "EC4", "copie", "C", "V"],
+  ["DD1", "DD2", "DD3", "DD4", "O", "ED1", "ED2", "ED3", "ED4", "", "U", "R"],
+  ["DE1", "DE2", "DE3", "DE4", "I", "EE1", "EE2", "EE3", "EE4", "tri", "V", "C"],
+  ["DF1", "DF2", "DF3", "DF4", "I", "EF1", "EF2", "EF3", "EF4", "export", "R", "U"],
 ];
 // <exemples-fin>
+
+/* Les 4 caractères possibles d'un nœud (colonnes CARA_VIS_1 / CARA_VIS_2).
+   C'est aussi la liste proposée dans la liste déroulante « Caractère »
+   d'index.html (garder les deux identiques). */
+const CARA_VALUES = ["V", "R", "C", "U"];
 
 /* ------------------------------------------------------------------
    2. Du tableau Excel vers le graphe { nodes, edges }
@@ -136,6 +141,13 @@ const EXEMPLE_ADJACENT_ROWS = [
    La colonne txn_dta est OPTIONNELLE elle aussi : c'est la TRANSFORMATION
    appliquée sur l'arête (données <-> edg) décrite par la ligne. Si elle est
    absente ou vide, la transformation de l'arête reste une chaîne vide "".
+
+   Les colonnes CARA_VIS_1 et CARA_VIS_2 sont OPTIONNELLES : elles donnent le
+   CARACTÈRE d'un nœud, une seule lettre parmi V, R, C, U :
+     CARA_VIS_1 -> caractère du nœud « données » (dta_1..dta_4) de la ligne
+     CARA_VIS_2 -> caractère du nœud « edg »     (edg_1..edg_4) de la ligne
+   Le caractère est écrit sur le nœud (ex. « [V] DA4.DA3.DA2.DA1 ») et sert
+   au filtre « Caractère » du panneau latéral.
 ------------------------------------------------------------------ */
 function rowsToGraph(rows) {
   // Point d'arrêt : inspecter `rows` (le tableau brut lu depuis Excel).
@@ -159,13 +171,25 @@ function rowsToGraph(rows) {
   const edgCol = {};
   let dirCol = -1;
   let txnCol = -1;
+  // Colonnes du CARACTÈRE (V, R, C ou U) de chaque nœud, -1 si absentes :
+  //   caraCol1 = colonne CARA_VIS_1 -> caractère du nœud « données » (dta_1..dta_4)
+  //   caraCol2 = colonne CARA_VIS_2 -> caractère du nœud « edg »     (edg_1..edg_4)
+  let caraCol1 = -1;
+  let caraCol2 = -1;
 
   header.forEach((name, idx) => {
     // idx = position de la colonne (0, 1, 2...). name = l'en-tête normalisé.
     let m;
+    // /^cara[ _-]?vis[ _-]?0*([12])$/ : "cara", "vis", puis 1 ou 2 (dans m[1]).
+    // "cara_vis_1", "CARA_VIS_2" (déjà mis en minuscules), "caravis1" -> ok.
+    // Testé EN PREMIER pour ne pas être confondu avec les autres colonnes.
+    if ((m = name.match(/^cara[ _-]?vis[ _-]?0*([12])$/))) {
+      if (m[1] === "1") caraCol1 = idx;
+      else caraCol2 = idx;
+    }
     // /^dta[ _-]?0*([1-4])$/ : "dta", puis éventuellement _ - ou espace, d'éventuels
     // zéros, puis un chiffre 1-4 (récupéré dans m[1]). "dta_3", "dta3", "dta 03" -> ok.
-    if ((m = name.match(/^dta[ _-]?0*([1-4])$/))) dtaCol[m[1]] = idx;
+    else if ((m = name.match(/^dta[ _-]?0*([1-4])$/))) dtaCol[m[1]] = idx;
     else if ((m = name.match(/^edg[ _-]?0*([1-4])$/))) edgCol[m[1]] = idx;
     // Colonne de sens : n'importe quel en-tête qui contient "dir" (edg_dir, edr_dir...).
     else if (name.includes("dir")) dirCol = idx;
@@ -209,6 +233,39 @@ function rowsToGraph(rows) {
     nodeKind.get(id).add(kind);
   };
 
+  // --- 2.3  Caractère (V / R / C / U) de chaque nœud ---------------------
+  const nodeCara = new Map(); // nom du nœud -> caractère "V", "R", "C" ou "U"
+
+  // readCara : lit la cellule de caractère d'une ligne.
+  // Renvoie "V", "R", "C", "U" ou "" (colonne absente, cellule vide ou
+  // valeur non reconnue — dans ce dernier cas on prévient dans la console).
+  const readCara = (row, col, r, colName) => {
+    if (col < 0) return ""; // colonne CARA_VIS_x absente du fichier
+    const v = String(row[col] == null ? "" : row[col]).trim().toUpperCase();
+    if (v === "") return "";
+    if (CARA_VALUES.includes(v)) return v;
+    console.warn(
+      `Ligne ${r + 1} : ${colName} = « ${row[col]} » non reconnu ` +
+        `(attendu ${CARA_VALUES.join(", ")}) -> ignoré.`
+    );
+    return "";
+  };
+
+  // noteCara : mémorise le caractère d'un nœud. Un même nœud peut apparaître
+  // sur plusieurs lignes : on garde le 1er caractère rencontré, et on prévient
+  // si une autre ligne en donne un différent.
+  const noteCara = (id, cara, r) => {
+    if (!id || !cara) return;
+    const before = nodeCara.get(id);
+    if (!before) nodeCara.set(id, cara);
+    else if (before !== cara) {
+      console.warn(
+        `Ligne ${r + 1} : le nœud « ${id} » a déjà le caractère ${before}, ` +
+          `${cara} ignoré.`
+      );
+    }
+  };
+
   for (let r = 1; r < rows.length; r++) { // r commence à 1 : on saute l'en-tête (rows[0])
     const row = rows[r] || [];
 
@@ -229,6 +286,11 @@ function rowsToGraph(rows) {
     // On enregistre le type de chaque nœud présent (il peut n'y en avoir qu'un).
     if (dtaNode) noteKind(dtaNode, "dta");
     if (edgNode) noteKind(edgNode, "edg");
+
+    // Caractère de chaque nœud : CARA_VIS_1 pour le nœud « données »,
+    // CARA_VIS_2 pour le nœud « edg » (aussi pour un nœud isolé).
+    noteCara(dtaNode, readCara(row, caraCol1, r, "CARA_VIS_1"), r);
+    noteCara(edgNode, readCara(row, caraCol2, r, "CARA_VIS_2"), r);
 
     // Un seul côté rempli (ex. une ligne avec dta_1..dta_4 mais pas de edg_*
     // ni de edg_dir) : c'est un nœud ISOLÉ. On le garde dans la liste des
@@ -284,11 +346,13 @@ function rowsToGraph(rows) {
   }
 
   // --- 2.4  On transforme la Map des nœuds en liste finale ---------------
-  // Pour chaque nœud : son id + son "kind" (utilisé par renderGraph pour la couleur).
+  // Pour chaque nœud : son id + son "kind" (utilisé par renderGraph pour la couleur)
+  // + son caractère "cara" ("V", "R", "C", "U", ou "" s'il n'est pas renseigné).
   const nodes = [...nodeKind.entries()].map(([id, kinds]) => ({
     id,
     // "both" si le nœud est à la fois donnée et edg, sinon l'un des deux.
     kind: kinds.has("dta") && kinds.has("edg") ? "both" : kinds.has("edg") ? "edg" : "dta",
+    cara: nodeCara.get(id) || "",
   }));
 
   // Point d'arrêt : le graphe final avant affichage.
@@ -323,7 +387,7 @@ function workbookBufferToGraph(buffer) {
 let stage, dropzone, stageError, legend, fileInput,
   exampleParcoursBtn, exampleAdjacentBtn, fileNameEl, layoutSelect, fitBtn,
   pngBtn, selectionHint, selectionDetail, selIdEl, succCountEl,
-  predCountEl, succTableBodyEl, predTableBodyEl, statsEl;
+  predCountEl, succTableBodyEl, predTableBodyEl, statsEl, caraSelect;
 
 function getDomRefs() {
   stage = document.getElementById("stage");
@@ -345,6 +409,7 @@ function getDomRefs() {
   succTableBodyEl = document.getElementById("succ-table-body");
   predTableBodyEl = document.getElementById("pred-table-body");
   statsEl = document.getElementById("stats");
+  caraSelect = document.getElementById("cara-select");
 }
 
 /* État global de l'application */
@@ -431,13 +496,17 @@ function renderGraph(data, mode = "") {
   // dans un autre : ici, tous les nœuds puis toutes les arêtes.
   const elements = [
     // un objet par nœud : id + label affiché + kind (pour la couleur)
-    // + parcours ("oui" / "non") : "oui" => nœud colorié en jaune (voir le style).
+    // + parcours ("oui" / "non") : "oui" => nœud colorié en jaune (voir le style)
+    // + cara : le caractère V / R / C / U ("" si non renseigné).
+    // Le label affiché commence par le caractère entre crochets quand il existe :
+    //   cara "V" -> "[V] DA4.DA3.DA2.DA1" ; pas de caractère -> "DA4.DA3.DA2.DA1".
     ...data.nodes.map((n) => ({
       data: {
         id: n.id,
-        label: n.id,
+        label: n.cara ? `[${n.cara}] ${n.id}` : n.id,
         kind: n.kind || "dta",
         parcours: isParcoursNode(n, mode) ? "oui" : "non",
+        cara: n.cara || "",
       },
     })),
     // un objet par arête : un id unique + les deux extrémités source/target
@@ -499,6 +568,18 @@ function renderGraph(data, mode = "") {
           "underlay-shape": "ellipse",
         },
       },
+      // Couleur de FOND selon le CARACTÈRE du nœud (colonnes CARA_VIS_1/2) :
+      //   V -> vert, C -> gris, R -> rouge, U -> bleu.
+      // Placé APRÈS la règle parcours : le fond jaune d'un nœud parcours est
+      // remplacé par la couleur de son caractère, mais son HALO jaune et sa
+      // bordure restent (ils ne sont pas redéfinis ici).
+      // Un nœud SANS caractère garde l'ancienne couleur (bleu/violet/rose,
+      // ou jaune s'il est parcours).
+      // Placé AVANT les règles de sélection : le clic reste visible.
+      { selector: 'node[cara = "V"]', style: { "background-color": "#22c55e" } },
+      { selector: 'node[cara = "C"]', style: { "background-color": "#9ca3af" } },
+      { selector: 'node[cara = "R"]', style: { "background-color": "#ef4444" } },
+      { selector: 'node[cara = "U"]', style: { "background-color": "#3b82f6" } },
       {
         selector: "edge",
         style: {
@@ -550,13 +631,13 @@ function renderGraph(data, mode = "") {
       // Successeurs du nœud cliqué (arêtes sortantes)
       {
         selector: "node.succ",
-        style: { "background-color": "#34d399", "border-color": "#065f46" },
+        style: { "background-color": "#22d3ee", "border-color": "#155e75" },
       },
       {
         selector: "edge.succ",
         style: {
-          "line-color": "#34d399",
-          "target-arrow-color": "#34d399",
+          "line-color": "#22d3ee",
+          "target-arrow-color": "#22d3ee",
           width: 3.5,
         },
       },
@@ -578,6 +659,25 @@ function renderGraph(data, mode = "") {
         selector: ".faded",
         style: { opacity: 0.12 },
       },
+      // Filtre « Caractère » (voir applyCaraFilter, section 5 bis) :
+      // - .cara-hidden : nœuds et arcs d'origine MASQUÉS (display none =
+      //   plus dessinés du tout, et ignorés par la mise en page) ;
+      // - .cara-edge   : arcs ajoutés entre deux nœuds du caractère choisi.
+      //   Pas de flèche (arc sans orientation), trait plein gris clair, et
+      //   pas de transformation (data txn = "").
+      {
+        selector: ".cara-hidden",
+        style: { display: "none" },
+      },
+      {
+        selector: "edge.cara-edge",
+        style: {
+          width: 2.5,
+          "line-color": "#94a3b8",
+          "line-style": "solid",
+          "target-arrow-shape": "none",
+        },
+      },
     ],
     layout: LAYOUT_CONFIGS[layoutSelect.value] || LAYOUT_CONFIGS.dagre,
   });
@@ -588,6 +688,107 @@ function renderGraph(data, mode = "") {
   cy.on("tap", (evt) => {
     if (evt.target === cy) clearSelection();
   });
+
+  // Le filtre « Caractère » choisi avant le chargement s'applique tout de suite
+  // (false = pas besoin de relancer la mise en page si le filtre est « Tous » :
+  // cytoscape vient déjà de la calculer).
+  applyCaraFilter(false);
+}
+
+/* ------------------------------------------------------------------
+   5 bis. Filtre « Caractère » (liste déroulante V / R / C / U)
+   ------------------------------------------------------------------
+   caraSelect.value vaut "" (= Tous) ou l'une des lettres V, R, C, U.
+     - "" : le graphe complet est affiché normalement ;
+     - "V" (par ex.) : on n'affiche QUE les nœuds de caractère V. Les autres
+       nœuds et TOUS les arcs d'origine sont masqués. À la place, on relie
+       deux nœuds V par un arc SANS ORIENTATION (pas de flèche) et SANS
+       TRANSFORMATION quand on peut aller de l'un à l'autre en suivant les
+       flèches du graphe complet, en ne passant que par des nœuds NON V.
+       Ex. (exemple parcours) : DA(V) -> EA -> DB -> EB -> DC -> EC(V)
+           devient un seul arc  DA — EC.
+   Pour déclencher : choisir une valeur dans la liste « Caractère » du
+   panneau latéral (événement "change", câblé dans wireEvents, section 9 g).
+------------------------------------------------------------------ */
+function applyCaraFilter(relayout = true) {
+  if (!cy || !caraSelect) return; // aucun graphe affiché : rien à filtrer
+  const choix = caraSelect.value;
+
+  // 1) On repart de zéro : on retire la sélection, les arcs ajoutés par un
+  //    filtre précédent, et on ré-affiche tout ce qui avait été masqué.
+  clearSelection();
+  cy.remove(".cara-edge");
+  cy.elements().removeClass("cara-hidden");
+
+  if (!choix) {
+    // « Tous » : graphe complet, mise en page normale.
+    if (relayout) runLayout();
+    return;
+  }
+
+  // 2) Les nœuds à garder = ceux qui ont le caractère choisi.
+  const garde = new Set(currentData.nodes.filter((n) => n.cara === choix).map((n) => n.id));
+
+  // 3) Liste d'adjacence du graphe COMPLET : pour chaque nœud, ses successeurs.
+  const succ = {};
+  currentData.nodes.forEach((n) => (succ[n.id] = []));
+  currentData.edges.forEach((e) => succ[e.source].push(e.target));
+
+  // 4) Pour chaque nœud gardé A : parcours en largeur (BFS) en suivant les
+  //    flèches. On traverse les nœuds NON gardés ; dès qu'on tombe sur un
+  //    nœud gardé B, on note la paire (A, B) et on ne va PAS plus loin
+  //    derrière B (B fera lui-même son propre parcours).
+  const paires = new Map(); // clé "A\nB" (ordre alphabétique) -> [A, B]
+  garde.forEach((a) => {
+    const vus = new Set([a]);
+    const file = [a];
+    while (file.length) {
+      const cur = file.shift();
+      for (const next of succ[cur]) {
+        if (vus.has(next)) continue;
+        vus.add(next);
+        if (garde.has(next)) {
+          // Arc sans orientation : A—B et B—A sont le même arc, d'où la clé triée.
+          const [x, y] = a < next ? [a, next] : [next, a];
+          paires.set(x + "\n" + y, [x, y]);
+        } else {
+          file.push(next); // nœud non gardé : on continue à travers lui
+        }
+      }
+    }
+  });
+
+  // 5) On masque les nœuds non gardés et tous les arcs d'origine...
+  cy.nodes().filter((n) => !garde.has(n.id())).addClass("cara-hidden");
+  cy.edges().addClass("cara-hidden");
+
+  // ...et on ajoute les nouveaux arcs (classe cara-edge : sans flèche, sans txn).
+  cy.add(
+    [...paires.values()].map(([x, y]) => ({
+      group: "edges",
+      classes: "cara-edge",
+      data: {
+        id: `cara:${x}<->${y}`,
+        source: x,
+        target: y,
+        txn: "", // la transformation est perdue dans cette vue
+        // halo jaune si les deux bouts sont des nœuds parcours (comme les autres arcs)
+        parcours:
+          cy.$id(x).data("parcours") === "oui" && cy.$id(y).data("parcours") === "oui" ? "oui" : "non",
+      },
+    }))
+  );
+
+  // 6) Mise en page recalculée sur ce qui reste visible.
+  runLayout();
+}
+
+/* Relance la mise en page choisie dans « Mise en page », uniquement sur les
+   éléments visibles (les éléments masqués par le filtre sont ignorés). */
+function runLayout() {
+  if (!cy) return;
+  const config = LAYOUT_CONFIGS[layoutSelect.value] || LAYOUT_CONFIGS.dagre;
+  cy.elements().not(".cara-hidden").layout(config).run();
 }
 
 /* ------------------------------------------------------------------
@@ -621,16 +822,18 @@ function selectNode(id) {
   node.removeClass("faded").addClass("selected"); // le nœud cliqué (bleu vif)
   outgoers.removeClass("faded");                  // ses voisins/arêtes sortants
   incomers.removeClass("faded");                  // ses voisins/arêtes entrants
-  successors.addClass("succ");                    // successeurs en vert
+  successors.addClass("succ");                    // successeurs en cyan (pas vert : vert = caractère V)
   predecessors.addClass("pred");                  // prédécesseurs en jaune
-  outgoers.edges().addClass("succ");              // arêtes sortantes en vert
+  outgoers.edges().addClass("succ");              // arêtes sortantes en cyan
   incomers.edges().addClass("pred");              // arêtes entrantes en jaune
 
   // 3) panneau latéral : on affiche l'id et les deux tableaux de voisins
   //    (voisin + transformation portée par l'arête qui les relie à `id`).
   selectionHint.hidden = true;
   selectionDetail.hidden = false;
-  selIdEl.textContent = id;
+  // Titre : l'id, suivi du caractère du nœud s'il en a un (ex. « … — caractère V »).
+  const cara = node.data("cara");
+  selIdEl.textContent = cara ? `${id} — caractère ${cara}` : id;
 
   // outgoers.edges() : les arêtes id -> successeur. Pour chacune, .target()
   // donne le nœud successeur et .data("txn") la transformation de la ligne
@@ -941,11 +1144,8 @@ function wireEvents() {
   });
 
   // d) Changement de disposition
-  layoutSelect.addEventListener("change", () => {
-    if (!cy) return;
-    const config = LAYOUT_CONFIGS[layoutSelect.value] || LAYOUT_CONFIGS.dagre;
-    cy.layout(config).run();
-  });
+  // (runLayout ne place que les éléments visibles : le filtre est respecté.)
+  layoutSelect.addEventListener("change", runLayout);
 
   // e) Recentrer le graphe
   fitBtn.addEventListener("click", () => {
@@ -961,6 +1161,12 @@ function wireEvents() {
     a.download = "graphe.png";
     a.click();
   });
+
+  // g) Filtre « Caractère » (V / R / C / U) : à chaque choix dans la liste,
+  //    on n'affiche plus que les nœuds de ce caractère, reliés par des arcs
+  //    sans orientation (voir applyCaraFilter, section 5 bis).
+  //    (fonction fléchée : on n'envoie pas l'objet événement en paramètre)
+  caraSelect.addEventListener("change", () => applyCaraFilter());
 }
 
 /* ------------------------------------------------------------------

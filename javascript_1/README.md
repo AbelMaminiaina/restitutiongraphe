@@ -18,8 +18,9 @@ Double-cliquez sur **`index.html`** (ou ouvrez-le dans un navigateur).
 | --- | --- |
 | Charger un fichier | Bouton **« Importer un .xlsx »** ou **glisser-déposer** le fichier sur la zone centrale |
 | Voir la démo | Boutons **« Exemple parcours »** et **« Exemple adjacent »** (données de `exemple_parcours.xlsx` / `exemple_adjacent.xlsx` intégrées au code) |
-| Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (vert) et *prédécesseurs* (jaune) sont mis en évidence, avec leur **transformation** (`txn_dta`) dans deux tableaux du panneau latéral |
+| Voisins d'un nœud | **Cliquez un nœud** : ses *successeurs* (cyan) et *prédécesseurs* (orange) sont mis en évidence, avec leur **transformation** (`txn_dta`) dans deux tableaux du panneau latéral |
 | Changer la disposition | Menu **« Mise en page »** (hiérarchique, cercle, forces…) |
+| Filtrer par caractère | Liste **« Caractère »** (Tous / V / R / C / U) : voir « Filtre par caractère » ci-dessous |
 | Exporter | Bouton **« Exporter PNG »** |
 
 ### Mode d'affichage : suffixe du nom du fichier
@@ -37,10 +38,46 @@ Le nom du fichier importé doit se terminer (juste avant `.xlsx`) par
 Le mode détecté est affiché à côté du nom du fichier. En mode adjacent, un nœud
 présent à la fois en `dta_*` et en `edg_*` est jaune.
 
-Au clic sur un nœud : successeurs en **vert**, prédécesseurs en **orange**.
+Au clic sur un nœud : successeurs en **cyan**, prédécesseurs en **orange**.
 
 Les arcs **avec** transformation (`txn_dta` renseigné) sont en **trait plein
 rouge vif** ; les arcs **sans** transformation en **pointillé gris**.
+
+### Couleur des nœuds selon le caractère
+
+Quand un nœud a un caractère (`CARA_VIS_1` / `CARA_VIS_2`), son **fond** prend
+la couleur de ce caractère, à la place du jaune / bleu / violet :
+
+| Caractère | Couleur du nœud |
+| --- | --- |
+| `V` | **vert** |
+| `C` | **gris** |
+| `R` | **rouge** |
+| `U` | **bleu** |
+
+Ce qui ne change pas : la couleur et la flèche des arcs, le **halo jaune** (et
+la bordure brune) des nœuds parcours, le halo jaune des arcs de parcours, et les
+couleurs de sélection au clic. Un nœud **sans** caractère garde l'ancienne
+couleur. Réglage : règles `node[cara = "…"]` dans `renderGraph` (`app.js`) et
+`.swatch-cara-*` dans `style.css` pour la légende.
+
+### Filtre par caractère
+
+La liste **« Caractère »** du panneau latéral (Tous / V / R / C / U) :
+
+- **Tous** : le graphe complet, comme d'habitude ;
+- **V** (ou R, C, U) : **seuls les nœuds de ce caractère** sont affichés ; les
+  autres nœuds et tous les arcs d'origine sont masqués. Deux nœuds V sont
+  reliés par un **arc sans orientation** (pas de flèche, trait plein gris
+  clair) quand on peut aller de l'un à l'autre en suivant les flèches du graphe
+  complet **en ne passant que par des nœuds non V**. Ces arcs **n'ont pas de
+  transformation** (`txn_dta` perdue).
+
+Exemple (`exemple_parcours.xlsx`, filtre V) : DA → EA → DB → EB → DC → EC
+devient l'arc **DA — EC**, et EC → DD → ED → DE devient **EC — DE**.
+
+La mise en page est recalculée sur les nœuds restants ; les statistiques
+restent celles du graphe complet. Code : `applyCaraFilter` dans `app.js`.
 
 ### Halo jaune autour du parcours
 
@@ -73,6 +110,10 @@ pour construire vos propres fichiers. Ils sont aussi intégrés au site : bouton
 > Dans les tableaux ci-dessous, « DA » désigne les 4 morceaux `DA1`..`DA4`
 > (colonnes `dta_1`..`dta_4` ou `edg_1`..`edg_4`) ; le nœud affiché s'appelle
 > `DA4.DA3.DA2.DA1`. « — » = `txn_dta` vide (arc en pointillé).
+> Les deux fichiers ont aussi les colonnes `CARA_VIS_1` / `CARA_VIS_2` (non
+> montrées dans les tableaux) : chaque nœud y reçoit un caractère fixe, défini
+> dans la table `CARA` de `generer-exemple.mjs` (DA = V, DB = R, DC = C,
+> DD = U, DE = V, DF = R ; EA = C, EB = U, EC = V, ED = R, EE = C, EF = U).
 
 ### `exemple_parcours.xlsx` — un parcours = une ligne
 
@@ -149,10 +190,10 @@ DA → DB → … → DF, pas sur EA..EF ni sur leurs arcs.
 
 Une feuille, une ligne d'en-tête, puis une ligne par enregistrement. Colonnes :
 
-| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` | `txn_dta` |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 | agrégation |
-| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 | filtre |
+| `dta_1` | `dta_2` | `dta_3` | `dta_4` | `edg_dir` | `edg_1` | `edg_2` | `edg_3` | `edg_4` | `txn_dta` | `CARA_VIS_1` | `CARA_VIS_2` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| DA1 | DA2 | DA3 | DA4 | `O` | EA1 | EA2 | EA3 | EA4 | agrégation | `V` | `C` |
+| DB1 | DB2 | DB3 | DB4 | `I` | EA1 | EA2 | EA3 | EA4 | filtre | `R` | `C` |
 
 Chaque ligne définit **deux nœuds** et **une arête** entre eux :
 
@@ -165,7 +206,12 @@ Chaque ligne définit **deux nœuds** et **une arête** entre eux :
     ⇒ arête `edg → données`.
 - la colonne **`txn_dta`** donne la **transformation** appliquée sur cette arête
   (une simple étiquette texte) ; elle est affichée dans les tableaux
-  successeurs/prédécesseurs du panneau latéral quand un nœud est sélectionné.
+  successeurs/prédécesseurs du panneau latéral quand un nœud est sélectionné ;
+- la colonne **`CARA_VIS_1`** donne le **caractère** du nœud « données »
+  (`dta_*`) et **`CARA_VIS_2`** celui du nœud « edg » (`edg_*`) : une lettre
+  parmi **`V`**, **`R`**, **`C`**, **`U`**. Il est écrit sur le nœud entre
+  crochets (`[V] DA4.DA3.DA2.DA1`), rappelé dans le panneau « Nœud
+  sélectionné », et utilisé par la liste « Caractère » pour filtrer.
 
 Donc : les **nœuds** du graphe sont toutes les concaténations `dta_*` et `edg_*`,
 les **arêtes** sont les couples (données, edg) orientés selon `edg_dir`, chacune
@@ -180,7 +226,12 @@ Tolérances de lecture :
 - morceaux `dta_*` / `edg_*` vides ignorés dans la concaténation ;
 - ligne dont le nœud « données » ou « edg » est entièrement vide : ignorée ;
 - colonne `txn_dta` optionnelle : absente ou vide → transformation affichée
-  comme « — » et arc dessiné en pointillé.
+  comme « — » et arc dessiné en pointillé ;
+- colonnes `CARA_VIS_1` / `CARA_VIS_2` optionnelles, minuscules acceptées
+  (`v` = `V`), en-tête `cara_vis_1`, `CARA VIS 1`, `caravis1`… reconnu ; cellule
+  vide → nœud sans caractère ; autre valeur que V/R/C/U → ignorée (avertissement
+  dans la console `F12`) ; un nœud présent sur plusieurs lignes garde le **premier**
+  caractère rencontré (conflit signalé dans la console).
 
 ## Partager à des utilisateurs (sans leur donner le code source)
 

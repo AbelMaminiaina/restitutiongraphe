@@ -27,7 +27,7 @@
         <span class="brand-dot"></span>
         <div>
           <h1>Graphe orienté non pondéré</h1>
-          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> (colonnes <code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>, <code>txn_dta</code>)</p>
+          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> (colonnes <code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>, <code>txn_dta</code>, <code>CARA_VIS_1</code>, <code>CARA_VIS_2</code>)</p>
         </div>
       </div>
 
@@ -64,6 +64,12 @@
           <span><i class="edge-line edge-txn"></i> arc avec transformation</span>
           <span><i class="edge-line edge-sans-txn"></i> arc sans transformation</span>
           <span><i class="edge-line edge-parcours"></i> arc entre nœuds parcours (halo)</span>
+          <span><b>[V]</b> caractère du nœud :</span>
+          <span><i class="swatch swatch-cara-v"></i> V</span>
+          <span><i class="swatch swatch-cara-c"></i> C</span>
+          <span><i class="swatch swatch-cara-r"></i> R</span>
+          <span><i class="swatch swatch-cara-u"></i> U</span>
+          <span><i class="edge-line edge-cara"></i> arc sans orientation (filtre caractère)</span>
           <span><i class="swatch swatch-sel"></i> sélection</span>
           <span><i class="swatch swatch-succ"></i> successeurs</span>
           <span><i class="swatch swatch-pred"></i> prédécesseurs</span>
@@ -95,6 +101,24 @@
             <button type="button" class="btn btn-ghost" id="fit-btn">Recentrer</button>
             <button type="button" class="btn btn-ghost" id="png-btn">Exporter PNG</button>
           </div>
+        </section>
+
+        <!-- Filtre sur le caractère des nœuds (colonnes CARA_VIS_1 / CARA_VIS_2).
+             Les valeurs doivent rester celles de CARA_VALUES dans app.js. -->
+        <section class="card">
+          <h2>Caractère</h2>
+          <label class="field">
+            Afficher les nœuds de caractère
+            <!-- autocomplete="off" : après un F5, le navigateur ne garde pas
+                 l'ancien choix, la liste repart toujours sur « Tous ». -->
+            <select id="cara-select" autocomplete="off">
+              <option value="" selected>Tous</option>
+              <option value="V">V</option>
+              <option value="R">R</option>
+              <option value="C">C</option>
+              <option value="U">U</option>
+            </select>
+          </label>
         </section>
 
         <section class="card">

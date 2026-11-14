@@ -93,21 +93,37 @@ const RECORDS_ADJACENT = [
   ["DF", "I", "EF", "export"],     // DF part vers EF     (en aval de la fin)
 ];
 
+// --- 1.c  Caractère de chaque nœud logique : V, R, C ou U -------------
+// Un nœud garde le MÊME caractère sur toutes les lignes où il apparaît
+// (qu'il soit écrit en dta_* ou en edg_*) : d'où une table par nœud.
+// Il est écrit dans CARA_VIS_1 (côté données) ou CARA_VIS_2 (côté edg).
+const CARA = {
+  DA: "V", DB: "R", DC: "C", DD: "U", DE: "V", DF: "R",
+  EA: "C", EB: "U", EC: "V", ED: "R", EE: "C", EF: "U",
+};
+
 /* ------------------------------------------------------------------
-   2. Transforme chaque enregistrement en une ligne de 10 colonnes
+   2. Transforme chaque enregistrement en une ligne de 12 colonnes
    ------------------------------------------------------------------
    Un nœud logique « DA » est décrit par ses 4 morceaux DA1..DA4.
    Comme l'application concatène dans l'ordre 4->1, l'étiquette
-   affichée sera « DA4.DA3.DA2.DA1 ».
+   affichée sera « [V] DA4.DA3.DA2.DA1 » (V = son caractère).
 ------------------------------------------------------------------ */
-const HEADER = ["dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta"];
+const HEADER = [
+  "dta_1", "dta_2", "dta_3", "dta_4", "edg_dir", "edg_1", "edg_2", "edg_3", "edg_4", "txn_dta",
+  "CARA_VIS_1", "CARA_VIS_2",
+];
 
 const parts = (nom) => [1, 2, 3, 4].map((i) => `${nom}${i}`); // "DA" -> ["DA1","DA2","DA3","DA4"]
 
 // toRows : enregistrements -> tableau complet (en-tête + lignes)
 const toRows = (records) => [
   HEADER,
-  ...records.map(([dta, dir, edg, txn]) => [...parts(dta), dir, ...parts(edg), txn]),
+  ...records.map(([dta, dir, edg, txn]) => [
+    ...parts(dta), dir, ...parts(edg), txn,
+    CARA[dta] || "", // CARA_VIS_1 : caractère du nœud données
+    CARA[edg] || "", // CARA_VIS_2 : caractère du nœud edg
+  ]),
 ];
 
 /* ------------------------------------------------------------------
