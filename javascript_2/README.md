@@ -72,15 +72,22 @@ La liste **« Caractère »** du panneau latéral (Tous + chaque caractère du
 fichier ; remplie à chaque chargement par `refreshCaraUi`) :
 
 - **Tous** : le graphe complet, comme d'habitude ;
-- **V** (ou R, U, G…) : **seuls les nœuds de ce caractère** sont affichés ; les
-  autres nœuds et tous les arcs d'origine sont masqués. Deux nœuds V sont
-  reliés par un **arc sans orientation** (pas de flèche, trait plein gris
-  clair) quand on peut aller de l'un à l'autre en suivant les flèches du graphe
-  complet **en ne passant que par des nœuds non V**. Ces arcs **n'ont pas de
-  transformation** (`txn_dta` perdue).
+- **V** (ou R, U, G…) : **seuls les nœuds de ce caractère** sont affichés,
+  les autres nœuds sont masqués. Pour les arcs entre deux nœuds V :
 
-Exemple (`exemple_parcours.xlsx`, filtre V) : DA → EA → DB → EB → DC → EC
-devient l'arc **DA — EC**, et EC → DD → ED → DE devient **EC — DE**.
+  | Cas | Arc affiché |
+  | --- | --- |
+  | les deux nœuds V **se suivent** (arc direct dans le fichier) | l'**arc d'origine** : même **orientation** (flèche) et même **transformation** (`txn_dta`, trait plein / pointillé) |
+  | on passe par des nœuds **non V** pour aller de l'un à l'autre | un **arc sans orientation** (pas de flèche, trait plein gris clair), **sans transformation** (`txn_dta` perdue) |
+
+Exemples (filtre V) :
+
+- `exemple_parcours.xlsx` : DA → EA → DB → EB → DC → EC devient l'arc
+  **DA — EC**, et EC → DD → ED → DE devient **EC — DE** (aucun nœud V ne se suit) ;
+- `exemple_adjacent.xlsx` : ED → DD et DF → EF (export) **restent orientés** ;
+  DB — DD, DB — EC et DD — DF deviennent des arcs sans orientation ;
+- `exemple_vert_adjacent.xlsx` (tous V) : tous les arcs restent comme dans le
+  graphe complet.
 
 La mise en page est recalculée sur les nœuds restants ; les statistiques
 restent celles du graphe complet. Code : `applyCaraFilter` dans `app.js`.
@@ -186,6 +193,15 @@ mode adjacent.
 Résultat : **12 nœuds** (6 jaunes DA..DF, 6 bleus EA..EF), **11 arcs**
 (7 pleins, 4 pointillés) ; halo sur les 6 nœuds jaunes et les 5 arcs
 DA → DB → … → DF, pas sur EA..EF ni sur leurs arcs.
+
+### `exemple_vert_adjacent.xlsx` — tous les nœuds verts
+
+Même onglet `Arc` que `exemple_adjacent.xlsx`, mais dans l'onglet `Noeud`
+**tous les nœuds ont le caractère `V`** : tout le graphe est vert, la légende
+et la liste « Caractère » ne proposent que `V`. Avec le filtre `V`, tous les
+nœuds restent et chaque arc devient un arc sans flèche. Généré par
+`node generer-exemple-vert.mjs` (n'écrit que ce fichier). Pas de bouton :
+l'importer avec « Importer un .xlsx ».
 
 ### Faire son propre fichier
 
@@ -358,6 +374,7 @@ fichiers. Fermez les `.xlsx` dans Excel avant de lancer le script (sinon
 | `app.js` | Lecture du `.xlsx`, construction du graphe, rendu cytoscape, disposition hiérarchique (dagre), statistiques, interactions |
 | `build.mjs` | Génère `dist/` (fichier unique autonome minifié + lanceurs) |
 | `generer-exemple.mjs` | (Re)génère les deux `.xlsx` d'exemple + les objets `EXEMPLE_PARCOURS` / `EXEMPLE_ADJACENT` de `app.js` |
+| `generer-exemple-vert.mjs` | Génère `exemple_vert_adjacent.xlsx` (tous les nœuds de caractère `V`) |
 | `vendor/` | Librairies minifiées (cytoscape, dagre, cytoscape-dagre, xlsx) copiées depuis jsDelivr |
 | `exemple_parcours.xlsx` | Démo mode parcours : 10 lignes → une seule ligne de 11 nœuds (tous jaunes) DA → EA → DB → … → DF, 10 arêtes (7 pleines, 3 pointillées) |
 | `exemple_adjacent.xlsx` | Démo mode adjacent : 6 nœuds jaunes qui se suivent DA → DB → DC → DD → DE → DF + 6 traitements voisins EA..EF (bleus), un par donnée → 12 nœuds, 11 arêtes (7 pleines, 4 pointillées) |

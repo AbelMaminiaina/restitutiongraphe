@@ -919,12 +919,17 @@ function refreshCaraUi(data) {
    caraSelect.value vaut "" (= Tous) ou l'un des caractères du fichier.
      - "" : le graphe complet est affiché normalement ;
      - "V" (par ex.) : on n'affiche QUE les nœuds de caractère V. Les autres
-       nœuds et TOUS les arcs d'origine sont masqués. À la place, on relie
-       deux nœuds V par un arc SANS ORIENTATION (pas de flèche) et SANS
-       TRANSFORMATION quand on peut aller de l'un à l'autre en suivant les
-       flèches du graphe complet, en ne passant que par des nœuds NON V.
+       nœuds sont masqués. Pour les arcs, deux cas :
+         a) deux nœuds V qui SE SUIVENT (arc direct A -> B dans le fichier) :
+            on GARDE l'arc d'origine, avec son ORIENTATION (flèche) et sa
+            TRANSFORMATION (txn_dta, trait plein ou pointillé comme avant) ;
+         b) deux nœuds V reliés en passant par des nœuds NON V : on les
+            relie par un arc SANS ORIENTATION (pas de flèche) et SANS
+            TRANSFORMATION (perdue, car le chemin en contenait plusieurs).
        Ex. (exemple parcours) : DA(V) -> EA -> DB -> EB -> DC -> EC(V)
-           devient un seul arc  DA — EC.
+           devient un seul arc  DA — EC  (cas b).
+       Ex. (exemple_vert_adjacent.xlsx, tous V) : tous les nœuds se suivent,
+           donc tous les arcs restent comme dans le graphe complet (cas a).
    Pour déclencher : choisir une valeur dans la liste « Caractère » du
    panneau latéral (événement "change", câblé dans wireEvents, section 9 g).
 ------------------------------------------------------------------ */
@@ -952,10 +957,24 @@ function applyCaraFilter(relayout = true) {
   currentData.nodes.forEach((n) => (succ[n.id] = []));
   currentData.edges.forEach((e) => succ[e.source].push(e.target));
 
-  // 4) Pour chaque nœud gardé A : parcours en largeur (BFS) en suivant les
-  //    flèches. On traverse les nœuds NON gardés ; dès qu'on tombe sur un
-  //    nœud gardé B, on note la paire (A, B) et on ne va PAS plus loin
-  //    derrière B (B fera lui-même son propre parcours).
+  // cle(A, B) : clé d'une paire SANS tenir compte du sens (A—B = B—A),
+  // obtenue en rangeant les deux noms par ordre alphabétique.
+  const cle = (a, b) => (a < b ? a + "\n" + b : b + "\n" + a);
+
+  // 4a) Cas a : les arcs d'origine dont les DEUX bouts sont gardés (les
+  //     nœuds se suivent). On note leur paire pour ne pas les doubler
+  //     ensuite par un arc sans orientation.
+  const directes = new Set();
+  currentData.edges.forEach((e) => {
+    if (garde.has(e.source) && garde.has(e.target)) directes.add(cle(e.source, e.target));
+  });
+
+  // 4b) Cas b : pour chaque nœud gardé A, parcours en largeur (BFS) en
+  //     suivant les flèches. On traverse les nœuds NON gardés ; dès qu'on
+  //     tombe sur un nœud gardé B, on note la paire (A, B) et on ne va PAS
+  //     plus loin derrière B (B fera lui-même son propre parcours).
+  //     Si B est un successeur DIRECT de A (cur === a), c'est le cas a :
+  //     l'arc d'origine est gardé, rien à ajouter.
   const paires = new Map(); // clé "A\nB" (ordre alphabétique) -> [A, B]
   garde.forEach((a) => {
     const vus = new Set([a]);
@@ -966,9 +985,10 @@ function applyCaraFilter(relayout = true) {
         if (vus.has(next)) continue;
         vus.add(next);
         if (garde.has(next)) {
-          // Arc sans orientation : A—B et B—A sont le même arc, d'où la clé triée.
-          const [x, y] = a < next ? [a, next] : [next, a];
-          paires.set(x + "\n" + y, [x, y]);
+          const k = cle(a, next);
+          // Pas d'arc sans orientation si un arc d'origine relie déjà A et B
+          // (dans un sens ou dans l'autre) : il est affiché tel quel.
+          if (cur !== a && !directes.has(k)) paires.set(k, a < next ? [a, next] : [next, a]);
         } else {
           file.push(next); // nœud non gardé : on continue à travers lui
         }
@@ -976,11 +996,14 @@ function applyCaraFilter(relayout = true) {
     }
   });
 
-  // 5) On masque les nœuds non gardés et tous les arcs d'origine...
+  // 5) On masque les nœuds non gardés, et les arcs d'origine SAUF ceux du
+  //    cas a (les deux bouts gardés : flèche et transformation conservées)...
   cy.nodes().filter((n) => !garde.has(n.id())).addClass("cara-hidden");
-  cy.edges().addClass("cara-hidden");
+  cy.edges()
+    .filter((e) => !(garde.has(e.source().id()) && garde.has(e.target().id())))
+    .addClass("cara-hidden");
 
-  // ...et on ajoute les nouveaux arcs (classe cara-edge : sans flèche, sans txn).
+  // ...et on ajoute les arcs du cas b (classe cara-edge : sans flèche, sans txn).
   cy.add(
     [...paires.values()].map(([x, y]) => ({
       group: "edges",
