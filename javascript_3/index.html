@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Graphe orienté non pondéré — visualiseur</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Librairies modernes, servies EN LOCAL depuis vendor/ (aucun accès internet).
+       - cytoscape : moteur de rendu de graphes (nœuds + arêtes) interactif
+       - dagre + cytoscape-dagre : disposition hiérarchique, idéale pour un graphe ORIENTÉ
+       - xlsx (SheetJS) : lecture des fichiers Excel .xlsx dans le navigateur
+       Toutes en version minifiée (.min.js).
+       Aucune installation npm : il suffit d'ouvrir index.html dans un navigateur. -->
+  <script src="vendor/cytoscape.min.js"></script>
+  <script src="vendor/dagre.min.js"></script>
+  <script src="vendor/cytoscape-dagre.min.js"></script>
+  <script src="vendor/xlsx.mini.min.js"></script>
+  <!-- L'appli, APRÈS les librairies qu'elle utilise. Elle est dans le <head> :
+       elle attend elle-même que la page soit construite (DOMContentLoaded,
+       voir la section 10 de app.js) avant de toucher aux boutons. -->
+  <script src="app.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <div>
+          <h1>Graphe orienté non pondéré</h1>
+          <p class="brand-sub">Chargez un fichier Excel <code>.xlsx</code> à 2 onglets : <code>Arc</code> (<code>dta_*</code>, <code>edg_dir</code>, <code>edg_*</code>, <code>txn_dta</code>) et <code>Noeud</code> (<code>Nœud_1..4</code>, <code>Cara_vis</code>)</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <label class="btn btn-primary">
+          Importer un .xlsx
+          <input type="file" id="file-input" accept=".xlsx,.xls" hidden />
+        </label>
+        <button type="button" class="btn btn-ghost" id="example-parcours-btn">Exemple parcours</button>
+        <button type="button" class="btn btn-ghost" id="example-adjacent-btn">Exemple adjacent</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- Zone centrale : le graphe + une zone de dépôt (glisser-déposer) -->
+      <main class="stage" id="stage">
+        <div class="dropzone" id="dropzone">
+          <div class="dropzone-inner">
+            <div class="dropzone-icon">⇪</div>
+            <p class="dropzone-title">Glissez-déposez votre fichier Excel <code>.xlsx</code> ici</p>
+            <p class="dropzone-hint">ou utilisez « Importer un .xlsx » / « Exemple parcours » / « Exemple adjacent »</p>
+          </div>
+        </div>
+
+        <div id="cy"></div>
+
+        <p class="stage-error" id="stage-error" hidden></p>
+
+        <!-- Petite légende en surimpression -->
+        <div class="legend" id="legend" hidden>
+          <span><i class="swatch swatch-edg"></i> nœud edg</span>
+          <span><i class="swatch swatch-dta"></i> nœud données</span>
+          <span><i class="swatch swatch-parcours"></i> nœud parcours</span>
+          <span><i class="edge-line edge-txn"></i> arc avec transformation</span>
+          <span><i class="edge-line edge-sans-txn"></i> arc sans transformation</span>
+          <span><i class="edge-line edge-parcours"></i> arc entre nœuds parcours (halo)</span>
+          <!-- Pastilles des caractères : remplies par refreshCaraUi (app.js)
+               avec les caractères présents dans l'onglet « Noeud ». -->
+          <span class="legend-cara" id="legend-cara" hidden></span>
+          <span><i class="edge-line edge-cara"></i> arc sans orientation (filtre caractère)</span>
+          <span><i class="swatch swatch-fantome"></i> nœud fantôme (sur une autre page, cliquer pour y aller)</span>
+          <span><i class="swatch swatch-sel"></i> sélection</span>
+          <span><i class="swatch swatch-succ"></i> successeurs</span>
+          <span><i class="swatch swatch-pred"></i> prédécesseurs</span>
+        </div>
+      </main>
+
+      <!-- Panneau latéral : infos, mise en page, statistiques -->
+      <aside class="panel">
+        <section class="card">
+          <h2>Fichier</h2>
+          <p class="muted" id="file-name">Aucun fichier chargé.</p>
+        </section>
+
+        <!-- Pagination : le graphe est découpé en pages de 2000 nœuds max
+             (TAILLE_PAGE dans app.js, section 4 ter). Caché tant qu'aucun
+             fichier n'est chargé ; rempli par refreshPagerUi (app.js). -->
+        <section class="card" id="pager-card" hidden>
+          <h2>Pagination</h2>
+          <div class="pager">
+            <button type="button" class="btn pager-btn" id="page-first" title="Première page">⏮</button>
+            <button type="button" class="btn pager-btn" id="page-prev" title="Page précédente">◀</button>
+            <span class="pager-num">
+              <input type="number" id="page-input" min="1" value="1" aria-label="Numéro de page" />
+              / <b id="page-total">1</b>
+            </span>
+            <button type="button" class="btn pager-btn" id="page-next" title="Page suivante">▶</button>
+            <button type="button" class="btn pager-btn" id="page-last" title="Dernière page">⏭</button>
+          </div>
+          <p class="muted pager-info" id="pager-info"></p>
+          <!-- Taille de page : plus petit = changement de page plus rapide.
+               autocomplete="off" : après F5, on repart sur 2000. -->
+          <label class="field pager-search">
+            Taille de page
+            <select id="page-size" autocomplete="off">
+              <option value="500">500 nœuds (le plus rapide)</option>
+              <option value="1000">1000 nœuds</option>
+              <option value="2000" selected>2000 nœuds</option>
+            </select>
+          </label>
+          <label class="field pager-search">
+            Chercher un nœud (ouvre sa page)
+            <span class="pager-search-row">
+              <input type="text" id="node-search" placeholder="ex. DA4.DA3.DA2.DA1" autocomplete="off" />
+              <button type="button" class="btn" id="node-search-btn">Aller</button>
+            </span>
+          </label>
+        </section>
+
+        <section class="card">
+          <h2>Mise en page</h2>
+          <label class="field">
+            Algorithme de disposition
+            <select id="layout-select">
+              <option value="dagre" selected>Hiérarchique (dagre, de haut en bas)</option>
+              <option value="dagreLR">Hiérarchique (dagre, de gauche à droite)</option>
+              <option value="breadthfirst">Parcours en largeur</option>
+              <option value="circle">Cercle</option>
+              <option value="concentric">Concentrique (par degré)</option>
+              <option value="grid">Grille</option>
+              <option value="cose">Forces (cose)</option>
+            </select>
+          </label>
+          <div class="btn-row">
+            <button type="button" class="btn btn-ghost" id="fit-btn">Recentrer</button>
+            <button type="button" class="btn btn-ghost" id="png-btn">Exporter PNG</button>
+          </div>
+        </section>
+
+        <!-- Filtre sur le caractère des nœuds (onglet « Noeud », colonne Cara_vis).
+             Les choix (V, R, U, G...) sont ajoutés par refreshCaraUi (app.js)
+             d'après le fichier chargé ; seul « Tous » est écrit ici. -->
+        <section class="card">
+          <h2>Caractère</h2>
+          <label class="field">
+            Afficher les nœuds de caractère
+            <!-- autocomplete="off" : après un F5, le navigateur ne garde pas
+                 l'ancien choix, la liste repart toujours sur « Tous ». -->
+            <select id="cara-select" autocomplete="off">
+              <option value="" selected>Tous</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="card">
+          <h2>Nœud sélectionné</h2>
+          <p class="muted" id="selection-hint">Cliquez un nœud pour voir ses voisins.</p>
+          <div id="selection-detail" hidden>
+            <p class="sel-title" id="sel-id"></p>
+            <div class="sel-block">
+              <span class="sel-label">Successeurs <b id="succ-count">0</b></span>
+              <table class="sel-table">
+                <thead><tr><th>Successeur</th><th>Transformation</th></tr></thead>
+                <tbody id="succ-table-body"></tbody>
+              </table>
+            </div>
+            <div class="sel-block">
+              <span class="sel-label">Prédécesseurs <b id="pred-count">0</b></span>
+              <table class="sel-table">
+                <thead><tr><th>Prédécesseur</th><th>Transformation</th></tr></thead>
+                <tbody id="pred-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Statistiques (graphe complet)</h2>
+          <div class="stats" id="stats">
+            <p class="muted">—</p>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+</body>
+</html>
